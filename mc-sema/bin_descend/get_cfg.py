@@ -11,7 +11,32 @@ _DEBUG = False
 
 def DEBUG(s):
     if _DEBUG:
-        sys.stdout.write(str(s))
+        sys.stdout.write('{}\n'.format(str(s)))
+
+
+def recoverCFG(bv, entries, outf):
+    # type: (binaryninja.BinaryView, list, file) -> None
+    pass
+
+
+def filterEntrySymbols(bv, symbols):
+    # type: (binaryninja.BinaryView, list) -> list
+    """ Filters out any function symbols that are not in the binary """
+    funcSymbols = [func.symbol.name for func in bv.functions]
+    filtered = set()
+    for symb in symbols:
+        if symb in funcSymbols:
+            filtered.add(symb)
+        else:
+            DEBUG('Could not find symbol "{}" in binary'.format(symb))
+    return list(filtered)
+
+
+def getAllExports(bv):
+    # type: (binaryninja.BinaryView) -> list
+    # TODO: Find all exports
+    return [bv.entry_function.symbol.name]
+
 
 
 def main():
@@ -66,7 +91,6 @@ def main():
     else:
         bvType = binaryninja.BinaryViewType['Raw']
         # Don't think this can be used for anything, quitting for now
-
         DEBUG('Unknown binary type: "{}"'.format(magicType))
         return
 
@@ -74,6 +98,26 @@ def main():
     bv = bvType.open(filepath)
     bv.update_analysis()
     time.sleep(0.1)  # May need to be changed
+
+    # NOTE: at the moment binja will not load a binary
+    # that doesn't have an entry point
+    if len(bv) == 0:
+        DEBUG("Binary could not be loaded in binja, is it linked?")
+        return
+
+    entryPoints = []
+    # TODO: exports_to_lift file
+    if args.entry_symbol:
+        entryPoints = filterEntrySymbols(bv, args.entry_symbol)
+    else:
+        entryPoints = getAllExports(bv)
+
+    if len(entryPoints) == 0:
+        DEBUG("Need to have at least one entry point to lift")
+        return
+
+    recoverCFG(bv, entryPoints, outf)
+
 
 if __name__ == '__main__':
     main()
