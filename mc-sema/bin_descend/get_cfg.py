@@ -3,6 +3,8 @@ import binaryninja
 import argparse
 import os
 import sys
+import magic
+import time
 
 _DEBUG = False
 
@@ -53,6 +55,25 @@ def main():
         outf = open(os.path.join(curpath, filepath + "_binja.cfg"), 'wb')
         outpath = os.path.join(curpath, filepath)
 
+    # Look at magic bytes to choose the right BinaryViewType
+    magicType = magic.from_file(os.path.join(curpath, filepath))
+    if 'ELF' in magicType:
+        bvType = binaryninja.BinaryViewType['ELF']
+    elif 'PE32' in magicType:
+        bvType = binaryninja.BinaryViewType['PE']
+    elif 'Mach-O' in magicType:
+        bvType = binaryninja.BinaryViewType['Mach-O']
+    else:
+        bvType = binaryninja.BinaryViewType['Raw']
+        # Don't think this can be used for anything, quitting for now
+
+        DEBUG('Unknown binary type: "{}"'.format(magicType))
+        return
+
+    # Load and analyze the binary
+    bv = bvType.open(filepath)
+    bv.update_analysis()
+    time.sleep(0.1)  # May need to be changed
 
 if __name__ == '__main__':
     main()
