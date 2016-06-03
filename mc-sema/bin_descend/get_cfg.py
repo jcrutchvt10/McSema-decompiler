@@ -5,6 +5,7 @@ import os
 import sys
 import magic
 import time
+import CFG_pb2
 
 _DEBUG = False
 
@@ -14,29 +15,65 @@ def DEBUG(s):
         sys.stdout.write('{}\n'.format(str(s)))
 
 
-def recoverCFG(bv, entries, outf):
-    # type: (binaryninja.BinaryView, list, file) -> None
+def recoverFunction(bv, pbMod, pbFunc):
+    # type: (binaryninja.BinaryView, CFG_pb2.Module, CFG_pb2.Function) -> None
     pass
 
 
+def addFunction(pbMod, addr):
+    # type: (CFG_pb2.Module, int) -> CFG_pb2.Function
+    pbFunc = pbMod.internal_funcs.add()
+    pbFunc.entry_address = addr
+    return pbFunc
+
+
+def processEntryPoint(bv, pbMod, name, addr):
+    # type: (binaryninja.BinaryView, CFG_pb2.Module, str, int) -> CFG_pb2.Function
+    # Create the entry point
+    pbEntry = pbMod.entries.add()
+    pbEntry.entry_name = name
+    pbEntry.entry_address = addr
+
+    # TODO: std_defs extra data
+
+    DEBUG('At EP {}:{:x}'.format(name, addr))
+
+    pbFunc = addFunction(pbMod, addr)
+    return pbFunc
+
+def recoverCFG(bv, entries, outf):
+    # type: (binaryninja.BinaryView, dict, file) -> None
+    pbMod = CFG_pb2.Module()
+    pbMod.module_name = bv.file.filename
+    DEBUG('PROCESSING: {}'.format(pbMod.module_name))
+
+    # TODO: segment related processing (not in api)
+
+    # Process the main entry points
+    for fname, faddr in entries.iteritems():
+        DEBUG('Recovering: {}'.format(fname))
+        pbFunc = processEntryPoint(bv, pbMod, fname, faddr)
+        recoverFunction(bv, pbMod, pbFunc)
+
+    print pbMod.SerializeToString()
+
 def filterEntrySymbols(bv, symbols):
-    # type: (binaryninja.BinaryView, list) -> list
+    # type: (binaryninja.BinaryView, list) -> dict
     """ Filters out any function symbols that are not in the binary """
     funcSymbols = [func.symbol.name for func in bv.functions]
-    filtered = set()
+    filtered = {}
     for symb in symbols:
         if symb in funcSymbols:
-            filtered.add(symb)
+            filtered[symb] = bv.symbols[symb].address
         else:
             DEBUG('Could not find symbol "{}" in binary'.format(symb))
-    return list(filtered)
+    return filtered
 
 
 def getAllExports(bv):
-    # type: (binaryninja.BinaryView) -> list
-    # TODO: Find all exports
-    return [bv.entry_function.symbol.name]
-
+    # type: (binaryninja.BinaryView) -> dict
+    # TODO: Find all exports (not in api)
+    return {bv.entry_function.symbol.name: bv.entry_point}
 
 
 def main():
