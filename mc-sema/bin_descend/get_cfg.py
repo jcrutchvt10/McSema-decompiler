@@ -15,9 +15,38 @@ def DEBUG(s):
         sys.stdout.write('{}\n'.format(str(s)))
 
 
+def addInst(pbBlock, addr, instBytes):
+    # type: (CFG_pb2.Block, int, str) -> CFG_pb2.Instruction
+    pbInst = pbBlock.insts.add()
+    pbInst.inst_bytes = instBytes
+    pbInst.inst_addr = addr
+    pbInst.inst_len = len(instBytes)
+    # TODO: optional fields
+
+    return pbInst
+
+
+def addBlock(pbFunc, block):
+    # type: (CFG_pb2.Function, binaryninja.LowLevelILBasicBlock) -> CFG_pb2.Block
+    pbBlock = pbFunc.blocks.add()
+    pbBlock.base_address = block.start
+    # TODO: block_follows
+
+    return pbBlock
+
+
 def recoverFunction(bv, pbMod, pbFunc):
     # type: (binaryninja.BinaryView, CFG_pb2.Module, CFG_pb2.Function) -> None
-    pass
+    func = bv.get_functions_at(pbFunc.entry_address)[0]  # type: binaryninja.Function
+
+    for block in func.basic_blocks:
+        pbBlock = addBlock(pbFunc, block)
+        idx = block.start
+        while idx < block.end:
+            instData = bv.read(idx, 16)
+            instInfo = bv.arch.get_instruction_info(instData, idx)
+            pbInst = addInst(pbBlock, idx, instData[:instInfo.length])
+            idx += instInfo.length
 
 
 def addFunction(pbMod, addr):
@@ -41,6 +70,7 @@ def processEntryPoint(bv, pbMod, name, addr):
     pbFunc = addFunction(pbMod, addr)
     return pbFunc
 
+
 def recoverCFG(bv, entries, outf):
     # type: (binaryninja.BinaryView, dict, file) -> None
     pbMod = CFG_pb2.Module()
@@ -55,7 +85,11 @@ def recoverCFG(bv, entries, outf):
         pbFunc = processEntryPoint(bv, pbMod, fname, faddr)
         recoverFunction(bv, pbMod, pbFunc)
 
-    print pbMod.SerializeToString()
+    outf.write(pbMod.SerializeToString())
+    outf.close()
+
+    DEBUG('Saved to: {}'.format(outf.name))
+
 
 def filterEntrySymbols(bv, symbols):
     # type: (binaryninja.BinaryView, list) -> dict
