@@ -12,6 +12,10 @@ _DEBUG = False
 EXT_MAP = {}
 EXT_DATA_MAP = {}
 
+EXTERNAL_NAMES = [
+    '@@GLIBC_',
+]
+
 
 def DEBUG(s):
     if _DEBUG:
@@ -59,6 +63,56 @@ def addFunction(pbMod, addr):
     return pbFunc
 
 
+def fixExternalName(name):
+    # type: (str) -> str
+    if name in EXT_MAP or name in EXT_DATA_MAP:
+        return name
+
+    # TODO: unlinked elf case
+
+    if name.endswith('_0'):
+        fixed = name[:-2]
+        if fixed in EXT_MAP:
+            return fixed
+
+    if name.startswith('__imp_'):
+        fixed = name[6:]
+        if fixed in EXT_MAP:
+            return fixed
+
+    for extName in EXTERNAL_NAMES:
+        if extName in name:
+            name = name[:name.find(extName)]
+            break
+    return name
+
+
+def isInEXT_MAP(name):
+    # type: (str) -> bool
+    return fixExternalName(name) in EXT_MAP
+
+
+def getFromEXT_MAP(name):
+    # type: (str) -> (int, int, chr, str)
+    return EXT_MAP[fixExternalName(name)]
+
+
+def getExportType(bv, name, addr):
+    # type: (binaryninja.BinaryView, str, int) -> (int, int, chr)
+    DEBUG('Processing export name: {} @ {:x}'.format(name, addr))
+    if isInEXT_MAP(name):
+        DEBUG('Export found in std_defs')
+        argc, conv, ret, sign = getFromEXT_MAP(name)
+    else:
+        ftype = bv.get_function_at(bv.platform, addr).type
+
+        argc = len(ftype.parameters)
+        ret = 'Y' if ftype.can_return else 'N'
+        # TODO: conv
+        conv = CFG_pb2.ExternalFunction.CalleeCleanup
+    return argc, conv, ret
+
+
 def processEntryPoint(bv, pbMod, name, addr):
     # type: (binaryninja.BinaryView, CFG_pb2.Module, str, int) -> CFG_pb2.Function
     # Create the entry point
@@ -66,7 +120,12 @@ def processEntryPoint(bv, pbMod, name, addr):
     pbEntry.entry_name = name
     pbEntry.entry_address = addr
 
-    # TODO: std_defs extra data
+    argc, conv, ret = getExportType(bv, name, addr)
+
+    # Add extra data
+    pbEntry.entry_extra.entry_argc = argc
+    pbEntry.entry_extra.entry_cconv = conv
+    pbEntry.entry_extra.does_return = ret == 'Y'
 
     DEBUG('At EP {}:{:x}'.format(name, addr))
 
@@ -128,6 +187,7 @@ def processDefsFile(f):
 
             EXT_MAP[funcname] = (int(argc), realconv, ret, sign)
     f.close()
+
 
 def filterEntrySymbols(bv, symbols):
     # type: (binaryninja.BinaryView, list) -> dict
@@ -224,9 +284,6 @@ def main():
         for file in args.std_defs:
             DEBUG('Loading standard definitions file: {}'.format(file.name))
             processDefsFile(file)
-
-    print EXT_MAP
-    print EXT_DATA_MAP
 
     entryPoints = []
     # TODO: exports_to_lift file
