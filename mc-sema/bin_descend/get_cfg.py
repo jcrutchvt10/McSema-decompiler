@@ -9,6 +9,9 @@ import CFG_pb2
 
 _DEBUG = False
 
+EXT_MAP = {}
+EXT_DATA_MAP = {}
+
 
 def DEBUG(s):
     if _DEBUG:
@@ -91,6 +94,41 @@ def recoverCFG(bv, entries, outf):
     DEBUG('Saved to: {}'.format(outf.name))
 
 
+def processDefsFile(f):
+    # type: (file) -> None
+    """ Load the std_defs data into the externals maps """
+    lines = [l.strip() for l in f.readlines()]
+    for l in lines:
+        if len(l) == 0 or l[0] == '#':
+            continue
+
+        if l.startswith('DATA:'):
+            # Process external data
+            mark, dataname, datasize = l.split()
+            EXT_DATA_MAP[dataname] = int(datasize)
+        else:
+            # Process external function
+            data = l.split()
+            funcname, argc, conv, ret = data[:4]
+            sign = data[4] if len(data) == 5 else None
+
+            # Get real calling convention
+            if conv == 'C':
+                realconv = CFG_pb2.ExternalFunction.CallerCleanup
+            elif conv == 'E':
+                realconv = CFG_pb2.ExternalFunction.CalleeCleanup
+            elif conv == 'F':
+                realconv = CFG_pb2.ExternalFunction.FastCall
+            else:
+                raise Exception('Unknown calling convention: {}'.format(conv))
+
+            # Validate return type
+            if ret not in ['Y', 'N']:
+                raise Exception('Unknown return type: {}'.format(ret))
+
+            EXT_MAP[funcname] = (int(argc), realconv, ret, sign)
+    f.close()
+
 def filterEntrySymbols(bv, symbols):
     # type: (binaryninja.BinaryView, list) -> dict
     """ Filters out any function symbols that are not in the binary """
@@ -122,6 +160,11 @@ def main():
 
     parser.add_argument('-d', '--debug', action='store_true',
                         help='Enable verbose debugging mode')
+
+    parser.add_argument('-s', '--std-defs',
+                        nargs='*', default=[],
+                        type=argparse.FileType('r'),
+                        help='std_defs file: definitions and calling conventions of imported functions and data')
 
     parser.add_argument('file', help='Binary to recover control flow graph from')
 
@@ -175,6 +218,15 @@ def main():
     if len(bv) == 0:
         DEBUG("Binary could not be loaded in binja, is it linked?")
         return
+
+    # Load std_defs files
+    if len(args.std_defs) > 0:
+        for file in args.std_defs:
+            DEBUG('Loading standard definitions file: {}'.format(file.name))
+            processDefsFile(file)
+
+    print EXT_MAP
+    print EXT_DATA_MAP
 
     entryPoints = []
     # TODO: exports_to_lift file
