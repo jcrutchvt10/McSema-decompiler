@@ -22,48 +22,48 @@ def DEBUG(s):
         sys.stdout.write('{}\n'.format(str(s)))
 
 
-def addInst(pbBlock, addr, instBytes):
+def add_inst(pb_block, addr, inst_bytes):
     # type: (CFG_pb2.Block, int, str) -> CFG_pb2.Instruction
-    pbInst = pbBlock.insts.add()
-    pbInst.inst_bytes = instBytes
-    pbInst.inst_addr = addr
-    pbInst.inst_len = len(instBytes)
+    pb_inst = pb_block.insts.add()
+    pb_inst.inst_bytes = inst_bytes
+    pb_inst.inst_addr = addr
+    pb_inst.inst_len = len(inst_bytes)
     # TODO: optional fields
 
-    return pbInst
+    return pb_inst
 
 
-def addBlock(pbFunc, block):
+def add_block(pb_func, block):
     # type: (CFG_pb2.Function, binaryninja.LowLevelILBasicBlock) -> CFG_pb2.Block
-    pbBlock = pbFunc.blocks.add()
-    pbBlock.base_address = block.start
+    pb_block = pb_func.blocks.add()
+    pb_block.base_address = block.start
     # TODO: block_follows
 
-    return pbBlock
+    return pb_block
 
 
-def recoverFunction(bv, pbMod, pbFunc):
+def recover_function(bv, pb_mod, pb_func):
     # type: (binaryninja.BinaryView, CFG_pb2.Module, CFG_pb2.Function) -> None
-    func = bv.get_functions_at(pbFunc.entry_address)[0]  # type: binaryninja.Function
+    func = bv.get_function_at(bv.platform, pb_func.entry_address)  # type: binaryninja.Function
 
     for block in func.basic_blocks:
-        pbBlock = addBlock(pbFunc, block)
+        pb_block = add_block(pb_func, block)
         idx = block.start
         while idx < block.end:
-            instData = bv.read(idx, 16)
-            instInfo = bv.arch.get_instruction_info(instData, idx)
-            pbInst = addInst(pbBlock, idx, instData[:instInfo.length])
-            idx += instInfo.length
+            inst_data = bv.read(idx, 16)
+            inst_info = bv.arch.get_instruction_info(inst_data, idx)
+            pb_inst = add_inst(pb_block, idx, inst_data[:inst_info.length])
+            idx += inst_info.length
 
 
-def addFunction(pbMod, addr):
+def add_function(pb_mod, addr):
     # type: (CFG_pb2.Module, int) -> CFG_pb2.Function
-    pbFunc = pbMod.internal_funcs.add()
-    pbFunc.entry_address = addr
-    return pbFunc
+    pb_func = pb_mod.internal_funcs.add()
+    pb_func.entry_address = addr
+    return pb_func
 
 
-def fixExternalName(name):
+def fix_external_name(name):
     # type: (str) -> str
     if name in EXT_MAP or name in EXT_DATA_MAP:
         return name
@@ -87,22 +87,22 @@ def fixExternalName(name):
     return name
 
 
-def isInEXT_MAP(name):
+def in_ext_map(name):
     # type: (str) -> bool
-    return fixExternalName(name) in EXT_MAP
+    return fix_external_name(name) in EXT_MAP
 
 
-def getFromEXT_MAP(name):
+def get_from_ext_map(name):
     # type: (str) -> (int, int, chr, str)
-    return EXT_MAP[fixExternalName(name)]
+    return EXT_MAP[fix_external_name(name)]
 
 
-def getExportType(bv, name, addr):
+def get_export_type(bv, name, addr):
     # type: (binaryninja.BinaryView, str, int) -> (int, int, chr)
     DEBUG('Processing export name: {} @ {:x}'.format(name, addr))
-    if isInEXT_MAP(name):
+    if in_ext_map(name):
         DEBUG('Export found in std_defs')
-        argc, conv, ret, sign = getFromEXT_MAP(name)
+        argc, conv, ret, sign = get_from_ext_map(name)
     else:
         ftype = bv.get_function_at(bv.platform, addr).type
 
@@ -113,47 +113,47 @@ def getExportType(bv, name, addr):
     return argc, conv, ret
 
 
-def processEntryPoint(bv, pbMod, name, addr):
+def process_entry_point(bv, pb_mod, name, addr):
     # type: (binaryninja.BinaryView, CFG_pb2.Module, str, int) -> CFG_pb2.Function
     # Create the entry point
-    pbEntry = pbMod.entries.add()
-    pbEntry.entry_name = name
-    pbEntry.entry_address = addr
+    pb_entry = pb_mod.entries.add()
+    pb_entry.entry_name = name
+    pb_entry.entry_address = addr
 
-    argc, conv, ret = getExportType(bv, name, addr)
+    argc, conv, ret = get_export_type(bv, name, addr)
 
     # Add extra data
-    pbEntry.entry_extra.entry_argc = argc
-    pbEntry.entry_extra.entry_cconv = conv
-    pbEntry.entry_extra.does_return = ret == 'Y'
+    pb_entry.entry_extra.entry_argc = argc
+    pb_entry.entry_extra.entry_cconv = conv
+    pb_entry.entry_extra.does_return = ret == 'Y'
 
     DEBUG('At EP {}:{:x}'.format(name, addr))
 
-    pbFunc = addFunction(pbMod, addr)
-    return pbFunc
+    pb_func = add_function(pb_mod, addr)
+    return pb_func
 
 
-def recoverCFG(bv, entries, outf):
+def recover_cfg(bv, entries, outf):
     # type: (binaryninja.BinaryView, dict, file) -> None
-    pbMod = CFG_pb2.Module()
-    pbMod.module_name = bv.file.filename
-    DEBUG('PROCESSING: {}'.format(pbMod.module_name))
+    pb_mod = CFG_pb2.Module()
+    pb_mod.module_name = bv.file.filename
+    DEBUG('PROCESSING: {}'.format(pb_mod.module_name))
 
     # TODO: segment related processing (not in api)
 
     # Process the main entry points
     for fname, faddr in entries.iteritems():
         DEBUG('Recovering: {}'.format(fname))
-        pbFunc = processEntryPoint(bv, pbMod, fname, faddr)
-        recoverFunction(bv, pbMod, pbFunc)
+        pb_func = process_entry_point(bv, pb_mod, fname, faddr)
+        recover_function(bv, pb_mod, pb_func)
 
-    outf.write(pbMod.SerializeToString())
+    outf.write(pb_mod.SerializeToString())
     outf.close()
 
     DEBUG('Saved to: {}'.format(outf.name))
 
 
-def processDefsFile(f):
+def process_defs_file(f):
     # type: (file) -> None
     """ Load the std_defs data into the externals maps """
     lines = [l.strip() for l in f.readlines()]
@@ -189,20 +189,20 @@ def processDefsFile(f):
     f.close()
 
 
-def filterEntrySymbols(bv, symbols):
+def filter_entries(bv, symbols):
     # type: (binaryninja.BinaryView, list) -> dict
     """ Filters out any function symbols that are not in the binary """
-    funcSymbols = [func.symbol.name for func in bv.functions]
+    func_syms = [func.symbol.name for func in bv.functions]
     filtered = {}
     for symb in symbols:
-        if symb in funcSymbols:
+        if symb in func_syms:
             filtered[symb] = bv.symbols[symb].address
         else:
             DEBUG('Could not find symbol "{}" in binary'.format(symb))
     return filtered
 
 
-def getAllExports(bv):
+def get_all_exports(bv):
     # type: (binaryninja.BinaryView) -> dict
     # TODO: Find all exports (not in api)
     return {bv.entry_function.symbol.name: bv.entry_point}
@@ -255,21 +255,21 @@ def main():
         outpath = os.path.join(curpath, filepath)
 
     # Look at magic bytes to choose the right BinaryViewType
-    magicType = magic.from_file(os.path.join(curpath, filepath))
-    if 'ELF' in magicType:
-        bvType = binaryninja.BinaryViewType['ELF']
-    elif 'PE32' in magicType:
-        bvType = binaryninja.BinaryViewType['PE']
-    elif 'Mach-O' in magicType:
-        bvType = binaryninja.BinaryViewType['Mach-O']
+    magic_type = magic.from_file(os.path.join(curpath, filepath))
+    if 'ELF' in magic_type:
+        bv_type = binaryninja.BinaryViewType['ELF']
+    elif 'PE32' in magic_type:
+        bv_type = binaryninja.BinaryViewType['PE']
+    elif 'Mach-O' in magic_type:
+        bv_type = binaryninja.BinaryViewType['Mach-O']
     else:
-        bvType = binaryninja.BinaryViewType['Raw']
+        bv_type = binaryninja.BinaryViewType['Raw']
         # Don't think this can be used for anything, quitting for now
-        DEBUG('Unknown binary type: "{}"'.format(magicType))
+        DEBUG('Unknown binary type: "{}"'.format(magic_type))
         return
 
     # Load and analyze the binary
-    bv = bvType.open(filepath)
+    bv = bv_type.open(filepath)
     bv.update_analysis()
     time.sleep(0.1)  # May need to be changed
 
@@ -281,22 +281,22 @@ def main():
 
     # Load std_defs files
     if len(args.std_defs) > 0:
-        for file in args.std_defs:
-            DEBUG('Loading standard definitions file: {}'.format(file.name))
-            processDefsFile(file)
+        for dfile in args.std_defs:
+            DEBUG('Loading standard definitions file: {}'.format(dfile.name))
+            process_defs_file(dfile)
 
-    entryPoints = []
+    epoints = []
     # TODO: exports_to_lift file
     if args.entry_symbol:
-        entryPoints = filterEntrySymbols(bv, args.entry_symbol)
+        epoints = filter_entries(bv, args.entry_symbol)
     else:
-        entryPoints = getAllExports(bv)
+        epoints = get_all_exports(bv)
 
-    if len(entryPoints) == 0:
+    if len(epoints) == 0:
         DEBUG("Need to have at least one entry point to lift")
         return
 
-    recoverCFG(bv, entryPoints, outf)
+    recover_cfg(bv, epoints, outf)
 
 
 if __name__ == '__main__':
