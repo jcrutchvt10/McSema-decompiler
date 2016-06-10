@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import binaryninja
+from binaryninja import core as binjacore
 import argparse
 import os
 import sys
@@ -12,66 +13,6 @@ _DEBUG = False
 EXT_MAP = {}
 EXT_DATA_MAP = {}
 
-CALLS = [
-    'call',
-    'callfi',
-    'callni'
-]
-
-RETS = [
-    'retf',
-    'retfd',
-    'retfq',
-    'retfw',
-    'retn',
-    'retnd',
-    'retnq',
-    'retnw'
-]
-
-COND_BRANCHES = [
-    'ja',
-    'jae',
-    'jb',
-    'jbe',
-    'jc',
-    'jcxz',
-    'je',
-    'jecxz',
-    'jg',
-    'jge',
-    'jl',
-    'jle',
-    'jna',
-    'jnae',
-    'jnb',
-    'jnbe',
-    'jnc',
-    'jne',
-    'jng',
-    'jnge',
-    'jnl',
-    'jnle',
-    'jno',
-    'jnp',
-    'jns',
-    'jnz',
-    'jo',
-    'jp',
-    'jpe',
-    'jpo',
-    'jrcxz',
-    'js',
-    'jz'
-]
-
-UCOND_BRANCHES = [
-    'jmp',
-    'jmpfi',
-    'jmpni',
-    'jmpshort'
-]
-
 EXTERNAL_NAMES = [
     '@@GLIBC_'
 ]
@@ -82,70 +23,62 @@ def DEBUG(s):
         sys.stdout.write('{}\n'.format(str(s)))
 
 
-def add_inst(pb_block, block, inst, addr, inst_bytes):
-    # type: (CFG_pb2.Block, binaryninja.BasicBlock, tuple, int, str) -> CFG_pb2.Instruction
-    pb_inst = pb_block.insts.add()
-    pb_inst.inst_bytes = inst_bytes
-    pb_inst.inst_addr = addr
-    pb_inst.inst_len = len(inst_bytes)
+def read_inst_bytes(bv, il):
+    # type: (binaryninja.BinaryView, binaryninja.LowLevelILInstruction) -> str
+    inst_data = bv.read(il.address, 16)
+    inst_info = bv.arch.get_instruction_info(inst_data, il.address)
+    return inst_data[:inst_info.length]
 
-    # Get the instruction type string
-    itext = inst[0][0].text.strip().lower()
-    if itext in UCOND_BRANCHES:
-        # Only 1 following block
-        target = block.outgoing_edges[0].target
+
+def add_inst(bv, pb_block, ilfunc, il):
+    # type: (binaryninja.BinaryView, CFG_pb2.Block, binaryninja.LowLevelILFunction, binaryninja.LowLevelILInstruction) -> None
+    pb_inst = pb_block.insts.add()
+    pb_inst.inst_bytes = read_inst_bytes(bv, il)
+    pb_inst.inst_addr = il.address
+    pb_inst.inst_len = len(pb_inst.inst_bytes)
+
+    op = il.operation
+    if op == binjacore.LLIL_GOTO:
+        # Single operand: target instruction idx
+        target = ilfunc[il.operands[0]].address
         # TODO: is this target external?
         pb_inst.true_target = target
-    elif itext in COND_BRANCHES:
-        # Two following blocks, get the two targets
-        for edge in block.outgoing_edges:
-            if edge.type == 'TrueBranch':
-                ttarget = edge.target
-            elif edge.type == 'FalseBranch':
-                ftarget = edge.target
-            else:
-                raise Exception('Unknown branch type in conditional jump: {}'.format(edge.type))
-        pb_inst.true_target = ttarget
-        pb_inst.false_target = ftarget
+    elif op == binjacore.LLIL_IF:
+        # Operands: internal cmp, true branch, false branch
+        ilcmp, true_idx, false_idx = il.operands
+        pb_inst.true_target = ilfunc[true_idx].address
+        pb_inst.false_target = ilfunc[false_idx].address
 
     # TODO: optional fields
 
-    return pb_inst
 
-
-def add_block(pb_func, block):
-    # type: (CFG_pb2.Function, binaryninja.BasicBlock) -> CFG_pb2.Block
+def add_block(pb_func, ilfunc, ilblock):
+    # type: (CFG_pb2.Function, binaryninja.LowLevelILFunction, binaryninja.LowLevelILBasicBlock) -> CFG_pb2.Block
     pb_block = pb_func.blocks.add()
-    pb_block.base_address = block.start
-    pb_block.block_follows.extend([edge.target for edge in block.outgoing_edges])
+    pb_block.base_address = ilfunc[ilblock.start].address
+
+    # Gather all successor block addresses
+    follows = [ilfunc[edge.target].address for edge in ilblock.outgoing_edges]
+    pb_block.block_follows.extend(follows)
 
     return pb_block
 
 
-def recover_function(bv, pb_mod, pb_func):
-    # type: (binaryninja.BinaryView, CFG_pb2.Module, CFG_pb2.Function) -> None
-    func = bv.get_function_at(bv.platform, pb_func.entry_address)
+def recover_function(bv, pb_func):
+    # type: (binaryninja.BinaryView, CFG_pb2.Function) -> None
+    ilfunc = bv.get_function_at(bv.platform, pb_func.entry_address).low_level_il
 
-    for block in func.basic_blocks:
-        pb_block = add_block(pb_func, block)
+    for ilblock in ilfunc:
+        pb_block = add_block(pb_func, ilfunc, ilblock)
+        for il in ilblock:
+            # Special case for LLIL_IF:
+            # The cmp is contained in the operands, so add it before the branch
+            if il.operation == binjacore.LLIL_IF:
+                ilcmp = il.operands[0]
+                add_inst(bv, pb_block, ilfunc, ilcmp)
 
-        # Get all instructions in the block, and keep track of which we are on
-        insts = list(block)
-        inst_idx = 0
-
-        # Start reading instructions until we hit the end of the block
-        inst_addr = block.start
-        while inst_addr < block.end:
-            # Read and decode instruction
-            inst_data = bv.read(inst_addr, 16)
-            inst_info = bv.arch.get_instruction_info(inst_data, inst_addr)
-
-            # Get the data we need from this instruction
-            add_inst(pb_block, block, insts[inst_idx], inst_addr, inst_data[:inst_info.length])
-
-            # Continue to the next instruction
-            inst_addr += inst_info.length
-            inst_idx += 1
+            # Add the instruction data
+            add_inst(bv, pb_block, ilfunc, il)
 
 
 def add_function(pb_mod, addr):
@@ -237,7 +170,7 @@ def recover_cfg(bv, entries, outf):
     for fname, faddr in entries.iteritems():
         DEBUG('Recovering: {}'.format(fname))
         pb_func = process_entry_point(bv, pb_mod, fname, faddr)
-        recover_function(bv, pb_mod, pb_func)
+        recover_function(bv, pb_func)
 
     outf.write(pb_mod.SerializeToString())
     outf.close()
