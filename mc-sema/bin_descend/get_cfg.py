@@ -12,6 +12,7 @@ _DEBUG = False
 
 EXT_MAP = {}
 EXT_DATA_MAP = {}
+EXTERNALS = []
 
 EXTERNAL_NAMES = [
     '@@GLIBC_'
@@ -21,6 +22,42 @@ EXTERNAL_NAMES = [
 def DEBUG(s):
     if _DEBUG:
         sys.stdout.write('{}\n'.format(str(s)))
+
+
+def does_return(fname):
+    # type: (str) -> bool
+    if in_ext_map(fname):
+        argc, conv, ret, sign = get_from_ext_map(fname)
+        return ret == 'N'
+    # Don't quit early
+    return True
+
+
+def handle_external_ref(fname):
+    # type: (str) -> str
+    fixed = fix_external_name(fname)
+    EXTERNALS.append(fixed)
+    return fixed
+
+
+def is_external_ref(bv, addr):
+    # type: (binaryninja.BinaryView, int) -> bool
+    sym = bv.get_symbol_at(addr)
+    if sym is None:
+        DEBUG("Couldn't get symbol for addr: {:x}".format(addr))
+        return False
+
+    # This is temporary until we can access different segments in binja
+    # Doesn't work for Mach-O because binja treats all functions as imports
+    if 'Imported' in sym.type:
+        return True
+
+    for extsign in EXTERNAL_NAMES:
+        if extsign in sym.name:
+            DEBUG('Assuming external reference because: {} in {}'.format(extsign, sym.name))
+            return True
+
+    return False
 
 
 def read_inst_bytes(bv, il):
@@ -41,13 +78,33 @@ def add_inst(bv, pb_block, ilfunc, il):
     if op == binjacore.LLIL_GOTO:
         # Single operand: target instruction idx
         target = ilfunc[il.operands[0]].address
-        # TODO: is this target external?
-        pb_inst.true_target = target
+        if is_external_ref(bv, target):
+            DEBUG('External jmp: {:x}'.format(target))
+            jmp_func = bv.get_function_at(bv.platform, target)
+            fname = handle_external_ref(jmp_func.symbol.name)
+            pb_inst.ext_call_name = fname
+
+            if not does_return(fname):
+                DEBUG('Noreturn jmp: {}'.format(fname))
+                return
+        else:
+            DEBUG('Internal jmp: {:x}'.format(target))
+            pb_inst.true_target = target
     elif op == binjacore.LLIL_IF:
         # Operands: internal cmp, true branch, false branch
         ilcmp, true_idx, false_idx = il.operands
         pb_inst.true_target = ilfunc[true_idx].address
         pb_inst.false_target = ilfunc[false_idx].address
+    elif op == binjacore.LLIL_CALL:
+        call_addr = il.operands[0].operands[0]
+        call_func = bv.get_function_at(bv.platform, call_addr)
+        if is_external_ref(bv, call_addr):
+            fname = handle_external_ref(call_func.symbol.name)
+            pb_inst.ext_call_name = fname
+
+            if not does_return(fname):
+                DEBUG('Noreturn call: {}'.format(fname))
+                return
 
     # TODO: optional fields
 
@@ -132,7 +189,7 @@ def get_export_type(bv, name, addr):
         ftype = bv.get_function_at(bv.platform, addr).type
 
         argc = len(ftype.parameters)
-        ret = 'Y' if ftype.can_return else 'N'
+        ret = 'N' if ftype.can_return else 'Y'
         # TODO: conv
         conv = CFG_pb2.ExternalFunction.CalleeCleanup
     return argc, conv, ret
@@ -150,7 +207,7 @@ def process_entry_point(bv, pb_mod, name, addr):
     # Add extra data
     pb_entry.entry_extra.entry_argc = argc
     pb_entry.entry_extra.entry_cconv = conv
-    pb_entry.entry_extra.does_return = ret == 'Y'
+    pb_entry.entry_extra.does_return = ret == 'N'
 
     DEBUG('At EP {}:{:x}'.format(name, addr))
 
