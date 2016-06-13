@@ -247,7 +247,7 @@ def process_entry_point(bv, pb_mod, name, addr):
 def recover_cfg(bv, entries, outf):
     # type: (binaryninja.BinaryView, dict, file) -> None
     pb_mod = CFG_pb2.Module()
-    pb_mod.module_name = bv.file.filename
+    pb_mod.module_name = os.path.basename(bv.file.filename)
     DEBUG('PROCESSING: {}'.format(pb_mod.module_name))
 
     # TODO: segment related processing (not in api)
