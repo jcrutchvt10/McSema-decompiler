@@ -12,7 +12,8 @@ _DEBUG = False
 
 EXT_MAP = {}
 EXT_DATA_MAP = {}
-EXTERNALS = []
+EXTERNALS = set()
+RECOVERED = set()
 
 EXTERNAL_NAMES = [
     '@@GLIBC_'
@@ -61,7 +62,7 @@ def does_return(fname):
 def handle_external_ref(fname):
     # type: (str) -> str
     fixed = fix_external_name(fname)
-    EXTERNALS.append(fixed)
+    EXTERNALS.add(fixed)
     return fixed
 
 
@@ -92,8 +93,8 @@ def read_inst_bytes(bv, il):
     return inst_data[:inst_info.length]
 
 
-def add_inst(bv, pb_block, ilfunc, il):
-    # type: (binaryninja.BinaryView, CFG_pb2.Block, binaryninja.LowLevelILFunction, binaryninja.LowLevelILInstruction) -> None
+def add_inst(bv, pb_block, ilfunc, il, new_eas):
+    # type: (binaryninja.BinaryView, CFG_pb2.Block, binaryninja.LowLevelILFunction, binaryninja.LowLevelILInstruction, set) -> None
     pb_inst = pb_block.insts.add()
     pb_inst.inst_bytes = read_inst_bytes(bv, il)
     pb_inst.inst_addr = il.address
@@ -130,6 +131,9 @@ def add_inst(bv, pb_block, ilfunc, il):
             if not does_return(fname):
                 DEBUG('Noreturn call: {}'.format(fname))
                 return
+        else:
+            DEBUG('Internal call: {}'.format(call_func.symbol.name))
+            new_eas.add(call_addr)
 
     # TODO: optional fields
 
@@ -146,8 +150,8 @@ def add_block(pb_func, ilfunc, ilblock):
     return pb_block
 
 
-def recover_function(bv, pb_func):
-    # type: (binaryninja.BinaryView, CFG_pb2.Function) -> None
+def recover_function(bv, pb_func, new_eas):
+    # type: (binaryninja.BinaryView, CFG_pb2.Function, set) -> None
     ilfunc = bv.get_function_at(bv.platform, pb_func.entry_address).low_level_il
 
     for ilblock in ilfunc:
@@ -157,10 +161,10 @@ def recover_function(bv, pb_func):
             # The cmp is contained in the operands, so add it before the branch
             if il.operation == binjacore.LLIL_IF:
                 ilcmp = il.operands[0]
-                add_inst(bv, pb_block, ilfunc, ilcmp)
+                add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
 
             # Add the instruction data
-            add_inst(bv, pb_block, ilfunc, il)
+            add_inst(bv, pb_block, ilfunc, il, new_eas)
 
 
 def add_function(pb_mod, addr):
@@ -249,11 +253,25 @@ def recover_cfg(bv, entries, outf):
     # TODO: segment related processing (not in api)
 
     # Process the main entry points
+    new_eas = set()
     for fname, faddr in entries.iteritems():
         DEBUG('Recovering: {}'.format(fname))
+        RECOVERED.add(faddr)
         pb_func = process_entry_point(bv, pb_mod, fname, faddr)
-        recover_function(bv, pb_func)
+        recover_function(bv, pb_func, new_eas)
 
+    # Process all new functions found
+    new_eas.difference_update(RECOVERED)
+    while len(new_eas) > 0:
+        ea = new_eas.pop()
+        if is_external_ref(bv, ea):
+            raise Exception('Function EA not code: {:x}'.format(ea))
+
+        RECOVERED.add(ea)
+        pb_func = add_function(pb_mod, ea)
+        recover_function(bv, pb_func, new_eas)
+
+    # Process any externals that were used
     process_externals(pb_mod)
 
     outf.write(pb_mod.SerializeToString())
