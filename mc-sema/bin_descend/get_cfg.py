@@ -24,9 +24,34 @@ def DEBUG(s):
         sys.stdout.write('{}\n'.format(str(s)))
 
 
+def process_externals(pb_mod):
+    # type: (CFG_pb2.Module) -> None
+    for ext in EXTERNALS:
+        if fixed_in_map(ext, EXT_MAP):
+            argc, conv, ret, sign = get_from_ext_map(ext)
+
+            # Save the external function info to the module
+            pb_extfn = pb_mod.external_funcs.add()
+            pb_extfn.symbol_name = fix_external_name(ext)
+            pb_extfn.argument_count = argc
+            pb_extfn.calling_convention = conv
+            pb_extfn.has_return = ret == 'N'
+            pb_extfn.no_return = ret == 'Y'
+        elif fixed_in_map(ext, EXT_DATA_MAP):
+            dname = fix_external_name(ext)
+            dsize = EXT_DATA_MAP[dname]
+
+            # Save the data info to the module
+            pb_extdata = pb_mod.external_data.add()
+            pb_extdata.symbol_name = dname
+            pb_extdata.data_size = dsize
+        else:
+            DEBUG('Unknown external symbol: {}'.format(ext))
+
+
 def does_return(fname):
     # type: (str) -> bool
-    if in_ext_map(fname):
+    if fixed_in_map(fname, EXT_MAP):
         argc, conv, ret, sign = get_from_ext_map(fname)
         return ret == 'N'
     # Don't quit early
@@ -169,9 +194,9 @@ def fix_external_name(name):
     return name
 
 
-def in_ext_map(name):
+def fixed_in_map(name, ext_map):
     # type: (str) -> bool
-    return fix_external_name(name) in EXT_MAP
+    return fix_external_name(name) in ext_map
 
 
 def get_from_ext_map(name):
@@ -182,7 +207,7 @@ def get_from_ext_map(name):
 def get_export_type(bv, name, addr):
     # type: (binaryninja.BinaryView, str, int) -> (int, int, chr)
     DEBUG('Processing export name: {} @ {:x}'.format(name, addr))
-    if in_ext_map(name):
+    if fixed_in_map(name, EXT_MAP):
         DEBUG('Export found in std_defs')
         argc, conv, ret, sign = get_from_ext_map(name)
     else:
@@ -228,6 +253,8 @@ def recover_cfg(bv, entries, outf):
         DEBUG('Recovering: {}'.format(fname))
         pb_func = process_entry_point(bv, pb_mod, fname, faddr)
         recover_function(bv, pb_func)
+
+    process_externals(pb_mod)
 
     outf.write(pb_mod.SerializeToString())
     outf.close()
