@@ -156,7 +156,13 @@ def recover_function(bv, pb_func, new_eas):
 
     for ilblock in ilfunc:
         pb_block = add_block(pb_func, ilfunc, ilblock)
+        prev_il = None
         for il in ilblock:
+            # Sometimes an extra LLIL_GOTO will be inserted at the end of a block if it was split
+            # This has the same address as the instruction the block was split at, so skip it when this happens
+            if prev_il is not None and prev_il.address == il.address:
+                continue
+
             # Special case for LLIL_IF:
             # The cmp is contained in the operands, so add it before the branch
             if il.operation == binjacore.LLIL_IF:
@@ -165,6 +171,7 @@ def recover_function(bv, pb_func, new_eas):
 
             # Add the instruction data
             add_inst(bv, pb_block, ilfunc, il, new_eas)
+            prev_il = il
 
 
 def add_function(pb_mod, addr):
