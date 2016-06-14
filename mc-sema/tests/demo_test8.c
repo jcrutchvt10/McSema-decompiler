@@ -11,3 +11,6 @@ int doOp(int k) {
     return v;
 }
 
+int main() {
+    return 0;
+}

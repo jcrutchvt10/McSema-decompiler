@@ -39,3 +39,7 @@ CHAR *doTrans(CHAR *inS) {
         return NULL;
     }
 }
+
+int main() {
+    return 0;
+}

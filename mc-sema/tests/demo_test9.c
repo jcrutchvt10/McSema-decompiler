@@ -14,3 +14,6 @@ int printit(char ch[]) {
 	return c;
 }
 
+int main() {
+    return 0;
+}

@@ -21,3 +21,7 @@ void demo3(char *src, char *dst) {
 
     return;
 }
+
+int main() {
+    return 0;
+}

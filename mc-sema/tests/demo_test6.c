@@ -60,3 +60,7 @@ void doWork(char **f, int l) {
 
     return;
 }
+
+int main() {
+    return 0;
+}

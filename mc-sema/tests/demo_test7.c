@@ -13,3 +13,6 @@ int checkFn(char *f) {
     return strcmp(f, foostr);
 }
 
+int main() {
+    return 0;
+}
