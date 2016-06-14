@@ -8,12 +8,12 @@ rm -f demo_test2.cfg demo_driver2.o demo_test2.o demo_test2_mine.o demo_driver2.
 ${CC} -ggdb -m32 -o demo_test2.o demo_test2.c
 
 #Check if binja is available
-python -c 'import binaryninjaa' 2>>/dev/null
+python -c 'import binaryninja' 2>>/dev/null
 if [ $? == 0 ]
 then
     echo "Using Binary Ninja to recover CFG"
     ../bin_descend/get_cfg.py -d demo_test2.o -o demo_test2.cfg --entry-symbol demo2
-elif [ -e "${IDA_PATH}/idaaq" ]
+elif [ -e "${IDA_PATH}/idaq" ]
 then
     echo "Using IDA to recover CFG"
     ${BIN_DESCEND_PATH}/bin_descend_wrapper.py -march=x86 -d -entry-symbol=demo2 -i=demo_test2.o>> /dev/null
