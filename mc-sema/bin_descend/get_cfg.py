@@ -134,6 +134,20 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         else:
             DEBUG('Internal call: {}'.format(call_func.symbol.name))
             new_eas.add(call_addr)
+    elif op == binjacore.LLIL_PUSH:
+        isize = pb_inst.inst_len
+        target = il.operands[0].operands[0]
+        # call $+5 is translated in IL as push(next_addr)
+        # Check if this is the case and handle it
+        if isize == 5 and target == il.address + 5:
+            DEBUG('Internal call $+5: {:x}'.format(target))
+            pb_inst.local_noreturn = True
+
+            if target not in RECOVERED:
+                DEBUG('Adding EA from self call: {:x}'.format(target))
+                new_eas.add(target)
+                pb_inst.imm_reference = target
+                pb_inst.imm_ref_type = CFG_pb2.Instruction.CodeRef
 
     # TODO: optional fields
 
