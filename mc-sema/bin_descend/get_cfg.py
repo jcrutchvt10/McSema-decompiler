@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-import binaryninja
-from binaryninja import core as binjacore
+import binaryninja as binja
 import argparse
 import os
 import sys
@@ -52,22 +51,24 @@ def process_externals(pb_mod):
 
 def does_return(fname):
     # type: (str) -> bool
+    # Try to find this function in the externals map
     if fixed_in_map(fname, EXT_MAP):
         argc, conv, ret, sign = get_from_ext_map(fname)
         return ret == 'N'
-    # Don't quit early
+    # If it isn't there, assume it returns
     return True
 
 
 def handle_external_ref(fname):
     # type: (str) -> str
+    # Fix and save the external's name
     fixed = fix_external_name(fname)
     EXTERNALS.add(fixed)
     return fixed
 
 
 def is_external_ref(bv, addr):
-    # type: (binaryninja.BinaryView, int) -> bool
+    # type: (binja.BinaryView, int) -> bool
     sym = bv.get_symbol_at(addr)
     if sym is None:
         DEBUG("Couldn't get symbol for addr: {:x}".format(addr))
@@ -78,6 +79,7 @@ def is_external_ref(bv, addr):
     if 'Imported' in sym.type:
         return True
 
+    # Check if any external names are in the symbol
     for extsign in EXTERNAL_NAMES:
         if extsign in sym.name:
             DEBUG('Assuming external reference because: {} in {}'.format(extsign, sym.name))
@@ -87,21 +89,22 @@ def is_external_ref(bv, addr):
 
 
 def read_inst_bytes(bv, il):
-    # type: (binaryninja.BinaryView, binaryninja.LowLevelILInstruction) -> str
+    # type: (binja.BinaryView, binja.LowLevelILInstruction) -> str
     inst_data = bv.read(il.address, 16)
     inst_info = bv.arch.get_instruction_info(inst_data, il.address)
     return inst_data[:inst_info.length]
 
 
 def add_inst(bv, pb_block, ilfunc, il, new_eas):
-    # type: (binaryninja.BinaryView, CFG_pb2.Block, binaryninja.LowLevelILFunction, binaryninja.LowLevelILInstruction, set) -> None
+    # type: (binja.BinaryView, CFG_pb2.Block, binja.LowLevelILFunction, binja.LowLevelILInstruction, set) -> None
     pb_inst = pb_block.insts.add()
     pb_inst.inst_bytes = read_inst_bytes(bv, il)
     pb_inst.inst_addr = il.address
     pb_inst.inst_len = len(pb_inst.inst_bytes)
 
+    # Fill in optional fields depending on the type of instruction
     op = il.operation
-    if op == binjacore.LLIL_GOTO:
+    if op == binja.core.LLIL_GOTO:
         # Single operand: target instruction idx
         target = ilfunc[il.operands[0]].address
         if is_external_ref(bv, target):
@@ -116,12 +119,12 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         else:
             DEBUG('Internal jmp: {:x}'.format(target))
             pb_inst.true_target = target
-    elif op == binjacore.LLIL_IF:
+    elif op == binja.core.LLIL_IF:
         # Operands: internal cmp, true branch, false branch
-        ilcmp, true_idx, false_idx = il.operands
+        true_idx, false_idx = il.operands[1:]
         pb_inst.true_target = ilfunc[true_idx].address
         pb_inst.false_target = ilfunc[false_idx].address
-    elif op == binjacore.LLIL_CALL:
+    elif op == binja.core.LLIL_CALL:
         call_addr = il.operands[0].operands[0]
         call_func = bv.get_function_at(bv.platform, call_addr)
         if is_external_ref(bv, call_addr):
@@ -133,6 +136,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
                 return
         else:
             DEBUG('Internal call: {}'.format(call_func.symbol.name))
+            # Save this address to recover it later
             new_eas.add(call_addr)
 
             # Check if this call doesn't return
@@ -140,8 +144,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
                 DEBUG('Local noreturn call: {:x}'.format(call_addr))
                 pb_inst.local_noreturn = True
                 return
-
-    elif op == binjacore.LLIL_PUSH:
+    elif op == binja.core.LLIL_PUSH:
         isize = pb_inst.inst_len
         target = il.operands[0].operands[0]
         # call $+5 is translated in IL as push(next_addr)
@@ -156,11 +159,9 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
                 pb_inst.imm_reference = target
                 pb_inst.imm_ref_type = CFG_pb2.Instruction.CodeRef
 
-    # TODO: optional fields
-
 
 def add_block(pb_func, ilfunc, ilblock):
-    # type: (CFG_pb2.Function, binaryninja.LowLevelILFunction, binaryninja.LowLevelILBasicBlock) -> CFG_pb2.Block
+    # type: (CFG_pb2.Function, binja.LowLevelILFunction, binja.LowLevelILBasicBlock) -> CFG_pb2.Block
     pb_block = pb_func.blocks.add()
     pb_block.base_address = ilfunc[ilblock.start].address
 
@@ -172,7 +173,7 @@ def add_block(pb_func, ilfunc, ilblock):
 
 
 def recover_function(bv, pb_func, new_eas):
-    # type: (binaryninja.BinaryView, CFG_pb2.Function, set) -> None
+    # type: (binja.BinaryView, CFG_pb2.Function, set) -> None
     ilfunc = bv.get_function_at(bv.platform, pb_func.entry_address).low_level_il
 
     for ilblock in ilfunc:
@@ -186,7 +187,7 @@ def recover_function(bv, pb_func, new_eas):
 
             # Special case for LLIL_IF:
             # The cmp is contained in the operands, so add it before the branch
-            if il.operation == binjacore.LLIL_IF:
+            if il.operation == binja.core.LLIL_IF:
                 ilcmp = il.operands[0]
                 add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
 
@@ -204,11 +205,13 @@ def add_function(pb_mod, addr):
 
 def fix_external_name(name):
     # type: (str) -> str
+    # Don't do anything if the name is already in the maps
     if name in EXT_MAP or name in EXT_DATA_MAP:
         return name
 
     # TODO: unlinked elf case
 
+    # Check for common cases
     if name.endswith('_0'):
         fixed = name[:-2]
         if fixed in EXT_MAP:
@@ -219,6 +222,7 @@ def fix_external_name(name):
         if fixed in EXT_MAP:
             return fixed
 
+    # Check for any external names in the symbol and remove them
     for extName in EXTERNAL_NAMES:
         if extName in name:
             name = name[:name.find(extName)]
@@ -237,12 +241,16 @@ def get_from_ext_map(name):
 
 
 def get_export_type(bv, name, addr):
-    # type: (binaryninja.BinaryView, str, int) -> (int, int, chr)
+    # type: (binja.BinaryView, str, int) -> (int, int, chr)
     DEBUG('Processing export name: {} @ {:x}'.format(name, addr))
+
+    # All externals should ideally be defined in the std_defs file
     if fixed_in_map(name, EXT_MAP):
         DEBUG('Export found in std_defs')
         argc, conv, ret, sign = get_from_ext_map(name)
     else:
+        # Attempt to figure out the information from the binary
+        # It's best to have this defined already
         ftype = bv.get_function_at(bv.platform, addr).type
 
         argc = len(ftype.parameters)
@@ -253,27 +261,25 @@ def get_export_type(bv, name, addr):
 
 
 def process_entry_point(bv, pb_mod, name, addr):
-    # type: (binaryninja.BinaryView, CFG_pb2.Module, str, int) -> CFG_pb2.Function
+    # type: (binja.BinaryView, CFG_pb2.Module, str, int) -> CFG_pb2.Function
     # Create the entry point
     pb_entry = pb_mod.entries.add()
     pb_entry.entry_name = name
     pb_entry.entry_address = addr
 
-    argc, conv, ret = get_export_type(bv, name, addr)
-
     # Add extra data
+    argc, conv, ret = get_export_type(bv, name, addr)
     pb_entry.entry_extra.entry_argc = argc
     pb_entry.entry_extra.entry_cconv = conv
     pb_entry.entry_extra.does_return = ret == 'N'
 
     DEBUG('At EP {}:{:x}'.format(name, addr))
-
     pb_func = add_function(pb_mod, addr)
     return pb_func
 
 
 def recover_cfg(bv, entries, outf):
-    # type: (binaryninja.BinaryView, dict, file) -> None
+    # type: (binja.BinaryView, dict, file) -> None
     pb_mod = CFG_pb2.Module()
     pb_mod.module_name = os.path.basename(bv.file.filename)
     DEBUG('PROCESSING: {}'.format(pb_mod.module_name))
@@ -284,24 +290,37 @@ def recover_cfg(bv, entries, outf):
     new_eas = set()
     for fname, faddr in entries.iteritems():
         DEBUG('Recovering: {}'.format(fname))
+
+        # Keep track of recovered functions
         RECOVERED.add(faddr)
+
+        # Recover the function
         pb_func = process_entry_point(bv, pb_mod, fname, faddr)
         recover_function(bv, pb_func, new_eas)
+    new_eas.difference_update(RECOVERED)
 
     # Process all new functions found
-    new_eas.difference_update(RECOVERED)
     while len(new_eas) > 0:
+        # Get and validate the next address
         ea = new_eas.pop()
         if is_external_ref(bv, ea):
             raise Exception('Function EA not code: {:x}'.format(ea))
+        DEBUG('Recovering: {}'.format(ea))
 
+        # Keep track of recovered functions
         RECOVERED.add(ea)
+
+        # Recover the function
         pb_func = add_function(pb_mod, ea)
         recover_function(bv, pb_func, new_eas)
+
+        # Make sure we don't repeat any functions
+        new_eas.difference_update(RECOVERED)
 
     # Process any externals that were used
     process_externals(pb_mod)
 
+    # Save the resulting protobuf
     outf.write(pb_mod.SerializeToString())
     outf.close()
 
@@ -345,7 +364,7 @@ def process_defs_file(f):
 
 
 def filter_entries(bv, symbols):
-    # type: (binaryninja.BinaryView, list) -> dict
+    # type: (binja.BinaryView, list) -> dict
     """ Filters out any function symbols that are not in the binary """
     func_syms = [func.symbol.name for func in bv.functions]
     filtered = {}
@@ -358,7 +377,7 @@ def filter_entries(bv, symbols):
 
 
 def get_all_exports(bv):
-    # type: (binaryninja.BinaryView) -> dict
+    # type: (binja.BinaryView) -> dict
     # TODO: Find all exports (not in api)
     return {bv.entry_function.symbol.name: bv.entry_point}
 
@@ -412,13 +431,13 @@ def main():
     # Look at magic bytes to choose the right BinaryViewType
     magic_type = magic.from_file(os.path.join(curpath, filepath))
     if 'ELF' in magic_type:
-        bv_type = binaryninja.BinaryViewType['ELF']
+        bv_type = binja.BinaryViewType['ELF']
     elif 'PE32' in magic_type:
-        bv_type = binaryninja.BinaryViewType['PE']
+        bv_type = binja.BinaryViewType['PE']
     elif 'Mach-O' in magic_type:
-        bv_type = binaryninja.BinaryViewType['Mach-O']
+        bv_type = binja.BinaryViewType['Mach-O']
     else:
-        bv_type = binaryninja.BinaryViewType['Raw']
+        bv_type = binja.BinaryViewType['Raw']
         # Don't think this can be used for anything, quitting for now
         DEBUG('Unknown binary type: "{}"'.format(magic_type))
         return
