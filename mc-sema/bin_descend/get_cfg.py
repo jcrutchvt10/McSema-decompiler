@@ -134,6 +134,13 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         else:
             DEBUG('Internal call: {}'.format(call_func.symbol.name))
             new_eas.add(call_addr)
+
+            # Check if this call doesn't return
+            if not call_func.type.can_return:
+                DEBUG('Local noreturn call: {:x}'.format(call_addr))
+                pb_inst.local_noreturn = True
+                return
+
     elif op == binjacore.LLIL_PUSH:
         isize = pb_inst.inst_len
         target = il.operands[0].operands[0]
