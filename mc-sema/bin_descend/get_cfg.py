@@ -88,6 +88,27 @@ def is_external_ref(bv, addr):
     return False
 
 
+def process_call(bv, pb_inst, call_addr, new_eas):
+    # type: (binja.BinaryView, CFG_pb2.Instruction, int, set) -> None
+    # Get the function at the given address
+    call_func = bv.get_function_at(bv.platform, call_addr)
+    if is_external_ref(bv, call_addr):
+        fname = handle_external_ref(call_func.symbol.name)
+        pb_inst.ext_call_name = fname
+
+        if not does_return(fname):
+            DEBUG('Noreturn call: {}'.format(fname))
+    else:
+        DEBUG('Internal call: {}'.format(call_func.symbol.name))
+        # Save this address to recover it later
+        new_eas.add(call_addr)
+
+        # Check if this call doesn't return
+        if not call_func.type.can_return:
+            DEBUG('Local noreturn call: {:x}'.format(call_addr))
+            pb_inst.local_noreturn = True
+
+
 def read_inst_bytes(bv, il):
     # type: (binja.BinaryView, binja.LowLevelILInstruction) -> str
     inst_data = bv.read(il.address, 16)
@@ -119,31 +140,31 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         else:
             DEBUG('Internal jmp: {:x}'.format(target))
             pb_inst.true_target = target
+
     elif op == binja.core.LLIL_IF:
         # Operands: internal cmp, true branch, false branch
         true_idx, false_idx = il.operands[1:]
         pb_inst.true_target = ilfunc[true_idx].address
         pb_inst.false_target = ilfunc[false_idx].address
+
     elif op == binja.core.LLIL_CALL:
-        call_addr = il.operands[0].operands[0]
-        call_func = bv.get_function_at(bv.platform, call_addr)
-        if is_external_ref(bv, call_addr):
-            fname = handle_external_ref(call_func.symbol.name)
-            pb_inst.ext_call_name = fname
+        # Get the operand for the call
+        call_op = il.operands[0]
+        if call_op.operation == binja.core.LLIL_CONST:
+            # If the call is to an immediate symbol/address, process it as usual
+            call_addr = call_op.operands[0]
+            process_call(bv, pb_inst, call_addr, new_eas)
+        elif call_op.operation == binja.core.LLIL_REG:
+            # If the call is to a register, check if the value can be resolved
+            reg = call_op.operands[0]
+            reg_val = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, reg)
 
-            if not does_return(fname):
-                DEBUG('Noreturn call: {}'.format(fname))
-                return
-        else:
-            DEBUG('Internal call: {}'.format(call_func.symbol.name))
-            # Save this address to recover it later
-            new_eas.add(call_addr)
+            # Check if binja was able to statically resolve the value
+            if reg_val.type == binja.core.ConstantValue:
+                target = reg_val.value
+                DEBUG('Register call resolved: {} == {}'.format(reg, target))
+                process_call(bv, pb_inst, target, new_eas)
 
-            # Check if this call doesn't return
-            if not call_func.type.can_return:
-                DEBUG('Local noreturn call: {:x}'.format(call_addr))
-                pb_inst.local_noreturn = True
-                return
     elif op == binja.core.LLIL_PUSH:
         isize = pb_inst.inst_len
         target = il.operands[0].operands[0]
