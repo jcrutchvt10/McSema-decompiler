@@ -163,7 +163,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
     op = il.operation
     if op == binja.core.LLIL_GOTO:
         # Single operand: target instruction idx
-        target = ilfunc[il.operands[0]].address
+        target = ilfunc[il.dest].address
         if is_external_ref(bv, target):
             DEBUG('External jmp: {:x}'.format(target))
             jmp_func = bv.get_function_at(bv.platform, target)
@@ -178,21 +178,20 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
             pb_inst.true_target = target
 
     elif op == binja.core.LLIL_IF:
-        # Operands: internal cmp, true branch, false branch
-        true_idx, false_idx = il.operands[1:]
-        pb_inst.true_target = ilfunc[true_idx].address
-        pb_inst.false_target = ilfunc[false_idx].address
+        # Save the addresses of the true and false branches
+        pb_inst.true_target = ilfunc[il.true].address
+        pb_inst.false_target = ilfunc[il.false].address
 
     elif op == binja.core.LLIL_CALL:
         # Get the operand for the call
-        call_op = il.operands[0]
+        call_op = il.dest
         if call_op.operation == binja.core.LLIL_CONST:
             # If the call is to an immediate symbol/address, process it as usual
-            call_addr = call_op.operands[0]
+            call_addr = call_op.value
             process_call(bv, il, call_op, pb_inst, call_addr, new_eas)
         elif call_op.operation == binja.core.LLIL_REG:
             # If the call is to a register, check if the value can be resolved
-            reg = call_op.operands[0]
+            reg = call_op.src
             reg_val = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, reg)
 
             # Check if binja was able to statically resolve the value
@@ -202,11 +201,11 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
                 process_call(bv, il, call_op, pb_inst, target, new_eas)
         else:
             # If this ever happens it should be handled
-            raise Exception('Unknown call op type: {} @ {}'.format(call_op.operation_name, il.address))
+            raise Exception('Unknown call op type: {} @ {:x}'.format(call_op.operation_name, il.address))
 
     elif op == binja.core.LLIL_PUSH:
         isize = pb_inst.inst_len
-        target = il.operands[0].operands[0]
+        target = il.src.operands[0]
         # call $+5 is translated in IL as push(next_addr)
         # Check if this is the case and handle it
         if isize == 5 and target == il.address + 5:
@@ -248,7 +247,7 @@ def recover_function(bv, pb_func, new_eas):
             # Special case for LLIL_IF:
             # The cmp is contained in the operands, so add it before the branch
             if il.operation == binja.core.LLIL_IF:
-                ilcmp = il.operands[0]
+                ilcmp = il.condition
                 add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
 
             # Add the instruction data
