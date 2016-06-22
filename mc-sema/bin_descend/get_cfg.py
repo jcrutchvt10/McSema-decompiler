@@ -459,6 +459,11 @@ def main():
                         type=argparse.FileType('r'),
                         help='std_defs file: definitions and calling conventions of imported functions and data')
 
+    parser.add_argument('-e', '--exports-to-lift',
+                        type=argparse.FileType('r'), default=None,
+                        help='A file containing exported functions to lift, one per line. '
+                             'If not specified, all exports will be lifted.')
+
     parser.add_argument('file', help='Binary to recover control flow graph from')
 
     args = parser.parse_args(sys.argv[1:])
@@ -518,12 +523,15 @@ def main():
             DEBUG('Loading standard definitions file: {}'.format(dfile.name))
             process_defs_file(dfile)
 
-    epoints = []
-    # TODO: exports_to_lift file
-    if args.entry_symbol:
-        epoints = filter_entries(bv, args.entry_symbol)
+    # Gather all exports to be lifted
+    if args.exports_to_lift:
+        lines = [l.strip() for l in args.exports_to_lift.readlines()]
+        epoints = filter_entries(bv, lines)
     else:
         epoints = get_all_exports(bv)
+
+    if args.entry_symbol:
+        epoints.update(filter_entries(bv, args.entry_symbol))
 
     if len(epoints) == 0:
         DEBUG("Need to have at least one entry point to lift")
