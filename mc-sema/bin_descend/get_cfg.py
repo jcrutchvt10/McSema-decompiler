@@ -88,8 +88,39 @@ def is_external_ref(bv, addr):
     return False
 
 
-def process_call(bv, pb_inst, call_addr, new_eas):
-    # type: (binja.BinaryView, CFG_pb2.Instruction, int, set) -> None
+def set_reference(pb_inst, op_type, ref_type, ref):
+    # type: (CFG_pb2.Instruction, str, CFG_pb2.RefType, int) -> None
+    if op_type == 'IMM':
+        pb_inst.imm_reference = ref
+        pb_inst.imm_ref_type = ref_type
+    elif op_type == 'MEM':
+        pb_inst.mem_reference = ref
+        pb_inst.mem_ref_type = ref_type
+    else:
+        DEBUG('Unknown ref type: {}'.format(op_type))
+
+
+def get_op_type(il, il_op):
+    # type: (binja.LowLevelILInstruction, binja.LowLevelILInstruction) -> str
+
+    if il_op.operation == binja.core.LLIL_CONST:
+        # A constant (instead of LLIL_LOAD) may still be a memory address
+        # Check if any of the following instructions use this operand
+        if il.operation in [binja.core.LLIL_CALL]:
+            # TODO: Is there a better way to check this? LLIL_SET_REG uses a constant even if it is memory access
+            return 'MEM'
+        # Special cases aside, this is an immediate value
+        return 'IMM'
+    elif il_op.operation == binja.core.LLIL_LOAD:
+        # LLIL_LOAD covers any kind of loading from memory
+        # i.e. direct address, phrase, displacement
+        return 'MEM'
+    # Assume MEM otherwise
+    return 'MEM'
+
+
+def process_call(bv, il, call_op, pb_inst, call_addr, new_eas):
+    # type: (binja.BinaryView, binja.LowLevelILInstruction, binja.LowLevelILInstruction, CFG_pb2.Instruction, int, set) -> None
     # Get the function at the given address
     call_func = bv.get_function_at(bv.platform, call_addr)
     if is_external_ref(bv, call_addr):
@@ -100,6 +131,11 @@ def process_call(bv, pb_inst, call_addr, new_eas):
             DEBUG('Noreturn call: {}'.format(fname))
     else:
         DEBUG('Internal call: {}'.format(call_func.symbol.name))
+
+        # Add a reference to the called address
+        op_type = get_op_type(il, call_op)
+        set_reference(pb_inst, op_type, CFG_pb2.Instruction.CodeRef, call_addr)
+
         # Save this address to recover it later
         new_eas.add(call_addr)
 
@@ -153,7 +189,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         if call_op.operation == binja.core.LLIL_CONST:
             # If the call is to an immediate symbol/address, process it as usual
             call_addr = call_op.operands[0]
-            process_call(bv, pb_inst, call_addr, new_eas)
+            process_call(bv, il, call_op, pb_inst, call_addr, new_eas)
         elif call_op.operation == binja.core.LLIL_REG:
             # If the call is to a register, check if the value can be resolved
             reg = call_op.operands[0]
@@ -163,7 +199,10 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
             if reg_val.type == binja.core.ConstantValue:
                 target = reg_val.value
                 DEBUG('Register call resolved: {} == {}'.format(reg, target))
-                process_call(bv, pb_inst, target, new_eas)
+                process_call(bv, il, call_op, pb_inst, target, new_eas)
+        else:
+            # If this ever happens it should be handled
+            raise Exception('Unknown call op type: {} @ {}'.format(call_op.operation_name, il.address))
 
     elif op == binja.core.LLIL_PUSH:
         isize = pb_inst.inst_len
