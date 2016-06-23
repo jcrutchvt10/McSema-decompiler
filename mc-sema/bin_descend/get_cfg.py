@@ -2,6 +2,7 @@
 import binaryninja as binja
 import argparse
 import os
+import struct
 import sys
 import magic
 import time
@@ -17,6 +18,11 @@ RECOVERED = set()
 EXTERNAL_NAMES = [
     '@@GLIBC_'
 ]
+
+ENDIAN_TO_STRUCT = {
+    0: '<',
+    1: '>'
+}
 
 
 def DEBUG(s):
@@ -47,6 +53,60 @@ def process_externals(pb_mod):
             pb_extdata.data_size = dsize
         else:
             DEBUG('Unknown external symbol: {}'.format(ext))
+
+
+def read_dword(bv, addr):
+    # type: (binja.BinaryView, int) -> int
+    data = bv.read(addr, 4)
+    fmt = '{}L'.format(ENDIAN_TO_STRUCT[bv.endianness])
+    return struct.unpack(fmt, data)[0]
+
+
+def read_qword(bv, addr):
+    # type: (binja.BinaryView, int) -> int
+    data = bv.read(addr, 8)
+    fmt = '{}Q'.format(ENDIAN_TO_STRUCT[bv.endianness])
+    return struct.unpack(fmt, data)[0]
+
+
+def search_displ_reg(il):
+    # type: (binja.LowLevelILInstruction) -> str
+    """
+    Searches for the register used in a phrase+displacement
+    ex: dword [eax * 4 + 0x08040000] -> eax
+    """
+    # If the register is found, return it
+    if il.operation == binja.core.LLIL_REG:
+        return il.src
+
+    # The il may be inside a LLIL_LOAD
+    if il.operation == binja.core.LLIL_LOAD:
+        return search_displ_reg(il.src)
+
+    # Continue to search the left and right operands
+    return search_displ_reg(il.left) or search_displ_reg(il.right)
+
+
+def search_displ_base(il):
+    # type: (binja.LowLevelILInstruction) -> int
+    """
+    Searches for the base address used in a phrase+displacement
+    ex: dword [eax * 4 + 0x08040000] -> 0x08040000
+    """
+    # The base will be found in an LLIL_ADD
+    if il.operation == binja.core.LLIL_ADD:
+        # One of the operands is a constant, the other is a register or expression
+        if il.left.operation == binja.core.LLIL_CONST:
+            return il.left.value
+        else:
+            return il.right.value
+
+    # The il may be inside a LLIL_LOAD
+    if il.operation == binja.core.LLIL_LOAD:
+        return search_displ_base(il.src)
+
+    # Continue to search the left and right operands
+    return search_displ_base(il.left) or search_displ_base(il.right)
 
 
 def does_return(fname):
@@ -217,6 +277,39 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
                 new_eas.add(target)
                 pb_inst.imm_reference = target
                 pb_inst.imm_ref_type = CFG_pb2.Instruction.CodeRef
+
+    elif op == binja.core.LLIL_JUMP_TO:
+        # This is a jump to an entry in a jump table
+        DEBUG('JMPTable instruction found @ {:x}'.format(il.address))
+
+        # Get the base address of the jump table
+        base = search_displ_base(il.dest)
+        DEBUG('\tJMPTable base: {:x}'.format(base))
+
+        # Get the register that this jump table is based on
+        jump_reg = search_displ_reg(il.dest)
+
+        # Try to resolve the range of possible values for this register
+        jump_range = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, jump_reg)
+        if jump_range.type not in [binja.core.SignedRangeValue, binja.core.UnsignedRangeValue]:
+            DEBUG('Unable to resolve register range for jump table: {}@{:x}'.format(jump_reg, il.address))
+            return
+
+        # TODO: make this work with 64 bit entries
+        # Read in all of the table entries
+        for i in xrange(jump_range.start, jump_range.end + jump_range.step, jump_range.step):
+            jump_entry = read_dword(bv, i * 4 + base)
+            pb_inst.jump_table.table_entries.append(jump_entry)
+
+            # Add this address to be recovered if it's the start of a function
+            if bv.get_function_at(bv.platform, jump_entry):
+                new_eas.add(jump_entry)
+
+            DEBUG('\t\tAdding JMPTable entry {}: {:x}'.format(i, jump_entry))
+
+        # Set to 0 for now
+        pb_inst.jump_table.zero_offset = 0
+        # TODO: jump_table.offset_from_data, need to know the start of the segment for this
 
 
 def add_block(pb_func, ilfunc, ilblock):
