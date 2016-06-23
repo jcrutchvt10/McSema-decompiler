@@ -623,10 +623,11 @@ def main():
             process_defs_file(dfile)
 
     # Gather all exports to be lifted
+    epoints = {}
     if args.exports_to_lift:
         lines = [l.strip() for l in args.exports_to_lift.readlines()]
         epoints = filter_entries(bv, lines)
-    else:
+    elif args.entry_symbol is None:
         epoints = get_all_exports(bv)
 
     if args.entry_symbol:
