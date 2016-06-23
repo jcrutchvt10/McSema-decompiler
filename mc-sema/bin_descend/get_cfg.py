@@ -295,10 +295,16 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
             DEBUG('Unable to resolve register range for jump table: {}@{:x}'.format(jump_reg, il.address))
             return
 
-        # TODO: make this work with 64 bit entries
+        # Pick the correct reader for this binary's address size
+        addrsize = bv.address_size
+        read_entry = {
+            4: read_dword,
+            8: read_qword
+        }[addrsize]
+
         # Read in all of the table entries
         for i in xrange(jump_range.start, jump_range.end + jump_range.step, jump_range.step):
-            jump_entry = read_dword(bv, i * 4 + base)
+            jump_entry = read_entry(bv, i * addrsize + base)
             pb_inst.jump_table.table_entries.append(jump_entry)
 
             # Add this address to be recovered if it's the start of a function
