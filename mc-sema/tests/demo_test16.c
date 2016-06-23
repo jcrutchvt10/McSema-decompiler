@@ -9,3 +9,6 @@ void shiftit(int amt, uint64_t *orig) {
     *orig = newval;
 }
 
+int main() {
+    return 0;
+}

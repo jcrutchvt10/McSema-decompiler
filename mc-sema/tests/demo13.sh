@@ -4,9 +4,15 @@ source env.sh
 
 rm -f demo_test13.cfg demo_driver13.o demo_test13.o demo_test13_mine.o demo_driver13.exe
 
-${CC} -ggdb -m32 -c -o demo_test13.o demo_test13.c
+${CC} -ggdb -m32 -O1 -o demo_test13.o demo_test13.c
 
-if [ -e "${IDA_PATH}/idaq" ]
+#Check if binja is available
+python -c 'import binaryninja' 2>>/dev/null
+if [ $? == 0 ]
+then
+    echo "Using Binary Ninja to recover CFG"
+    ../bin_descend/get_cfg.py -d demo_test13.o -o demo_test13.cfg -s demo13_map.txt --entry-symbol switches
+elif [ -e "${IDA_PATH}/idaq" ]
 then
     echo "Using IDA to recover CFG"
     ${BIN_DESCEND_PATH}/bin_descend_wrapper.py -march=x86 -func-map="demo13_map.txt" -entry-symbol=switches -i=demo_test13.o >> /dev/null

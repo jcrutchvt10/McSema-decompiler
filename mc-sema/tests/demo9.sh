@@ -7,7 +7,7 @@ rm -f demo_test9.cfg demo_driver9.o demo_test9.o demo_test9_mine.o demo_driver9.
 ${CC} -ggdb -m32 -o demo_test9.o demo_test9.c
 
 #Check if binja is available
-python -c 'import binaryninjaa' 2>>/dev/null
+python -c 'import binaryninja' 2>>/dev/null
 if [ $? == 0 ]
 then
     echo "Using Binary Ninja to recover CFG"

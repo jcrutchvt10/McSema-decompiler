@@ -4,9 +4,15 @@ source env.sh
 
 rm -f sailboat.o sailboat_mine.o sailboat.cfg sailboat.bc sailboat_opt.bc sailboat_run.exe
 
-${CC} -O2 -ggdb -m32 -c -o sailboat.o sailboat.c 
+${CC} -O1 -ggdb -m32 -o sailboat.o sailboat.c
 
-if [ -e "${IDA_PATH}/idaq" ]
+#Check if binja is available
+python -c 'import binaryninja' 2>>/dev/null
+if [ $? == 0 ]
+then
+    echo "Using Binary Ninja to recover CFG"
+    ../bin_descend/get_cfg.py -d sailboat.o -o sailboat.cfg -s sailboat.txt --entry-symbol keycomp
+elif [ -e "${IDA_PATH}/idaq" ]
 then
     echo "Using IDA to recover CFG"
     ${BIN_DESCEND_PATH}/bin_descend_wrapper.py -march=x86 -func-map=sailboat.txt -entry-symbol=keycomp -i=sailboat.o>> /dev/null

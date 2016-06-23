@@ -20,3 +20,7 @@ int __cdecl imcdecl(int a1, int a2) {
     printf("cdecl args are: %08x, %08x\n", a1, a2);
     return a1+a2;
 }
+
+int main() {
+    return 0;
+}

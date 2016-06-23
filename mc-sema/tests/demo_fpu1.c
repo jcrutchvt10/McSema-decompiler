@@ -7,3 +7,6 @@ long double timespi(long double k) {
     return k*pi;
 }
 
+int main() {
+    return 0;
+}

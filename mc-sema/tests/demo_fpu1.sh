@@ -4,9 +4,15 @@ source env.sh
 
 rm -f demo_fpu1.cfg demo_driver_fpu1.o demo_fpu1.o demo_fpu1_mine.o demo_driver_fpu1.exe
 
-${CC} -ggdb -m32 -c -o demo_fpu1.o demo_fpu1.c
+${CC} -ggdb -m32 -o demo_fpu1.o demo_fpu1.c
 
-if [ -e "${IDA_PATH}/idaq" ]
+#Check if binja is available
+python -c 'import binaryninja' 2>>/dev/null
+if [ $? == 0 ]
+then
+    echo "Using Binary Ninja to recover CFG"
+    ../bin_descend/get_cfg.py -d demo_fpu1.o -o demo_fpu1.cfg --entry-symbol timespi
+elif [ -e "${IDA_PATH}/idaq" ]
 then
     echo "Using IDA to recover CFG"
     ${BIN_DESCEND_PATH}/bin_descend_wrapper.py -march=x86 -d -entry-symbol=timespi -i=demo_fpu1.o>> /dev/null

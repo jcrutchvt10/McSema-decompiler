@@ -5,8 +5,26 @@
 // key{d9dd 1cb9 dc13 ebc3dc37 80d76123 ee34}
 //
 //
-extern uint32_t to_byte(uint8_t b); 
-extern uint32_t read_bytes(uint32_t base, const char *p, int l);
+
+uint32_t to_byte(uint8_t b) {
+    if(b <= '9') {return b - '0';}
+    if(b <= 'F') {return b - '7';}
+    if(b <= 'f') {return b - 'W';}
+
+    return 0;
+}
+
+uint32_t read_bytes(uint32_t base, const char *p, int l)
+{
+    int i;
+    for(i = 0; i < l; i++)
+    {
+        base <<= 4;
+        base |= to_byte(p[i]);
+    }
+
+    return base;
+}
 
 int keycomp(const char *key)
 {
@@ -147,3 +165,7 @@ int keycomp(const char *key)
 
     return ret;
 } 
+
+int main() {
+    return 0;
+}

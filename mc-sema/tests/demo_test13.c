@@ -66,3 +66,7 @@ int switches(int input)
 
     return 0;
 }
+
+int main() {
+    return 0;
+}
