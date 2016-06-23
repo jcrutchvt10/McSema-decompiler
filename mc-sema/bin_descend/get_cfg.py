@@ -205,6 +205,18 @@ def process_call(bv, il, call_op, pb_inst, call_addr, new_eas):
             pb_inst.local_noreturn = True
 
 
+def fix_branch_addr(il):
+    # type: (binja.LowLevelILInstruction) -> int
+    """
+    In the IL, all cmp's are contained inside single LLIL_IF instructions,
+    so whenever you branch to one of these, you actually want the address of
+    the cmp, not the LLIL_IF
+    """
+    if il.operation == binja.core.LLIL_IF:
+        return il.condition.address
+    return il.address
+
+
 def read_inst_bytes(bv, il):
     # type: (binja.BinaryView, binja.LowLevelILInstruction) -> str
     inst_data = bv.read(il.address, 16)
@@ -213,7 +225,7 @@ def read_inst_bytes(bv, il):
 
 
 def add_inst(bv, pb_block, ilfunc, il, new_eas):
-    # type: (binja.BinaryView, CFG_pb2.Block, binja.LowLevelILFunction, binja.LowLevelILInstruction, set) -> None
+    # type: (binja.BinaryView, CFG_pb2.Block, binja.LowLevelILFunction, binja.LowLevelILInstruction, set) -> CFG_pb2.Instruction
     pb_inst = pb_block.insts.add()
     pb_inst.inst_bytes = read_inst_bytes(bv, il)
     pb_inst.inst_addr = il.address
@@ -223,7 +235,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
     op = il.operation
     if op == binja.core.LLIL_GOTO:
         # Single operand: target instruction idx
-        target = ilfunc[il.dest].address
+        target = fix_branch_addr(ilfunc[il.dest])
         if is_external_ref(bv, target):
             DEBUG('External jmp: {:x}'.format(target))
             jmp_func = bv.get_function_at(bv.platform, target)
@@ -232,15 +244,15 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
 
             if not does_return(fname):
                 DEBUG('Noreturn jmp: {}'.format(fname))
-                return
+                return pb_inst
         else:
             DEBUG('Internal jmp: {:x}'.format(target))
             pb_inst.true_target = target
 
     elif op == binja.core.LLIL_IF:
         # Save the addresses of the true and false branches
-        pb_inst.true_target = ilfunc[il.true].address
-        pb_inst.false_target = ilfunc[il.false].address
+        pb_inst.true_target = fix_branch_addr(ilfunc[il.true])
+        pb_inst.false_target = fix_branch_addr(ilfunc[il.false])
 
     elif op == binja.core.LLIL_CALL:
         # Get the operand for the call
@@ -293,7 +305,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         jump_range = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, jump_reg)
         if jump_range.type not in [binja.core.SignedRangeValue, binja.core.UnsignedRangeValue]:
             DEBUG('Unable to resolve register range for jump table: {}@{:x}'.format(jump_reg, il.address))
-            return
+            return pb_inst
 
         # Pick the correct reader for this binary's address size
         addrsize = bv.address_size
@@ -317,14 +329,16 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         pb_inst.jump_table.zero_offset = 0
         # TODO: jump_table.offset_from_data, need to know the start of the segment for this
 
+    return pb_inst
 
-def add_block(pb_func, ilfunc, ilblock):
-    # type: (CFG_pb2.Function, binja.LowLevelILFunction, binja.LowLevelILBasicBlock) -> CFG_pb2.Block
+
+def add_block(pb_func, block):
+    # type: (CFG_pb2.Function, binja.BasicBlock) -> CFG_pb2.Block
     pb_block = pb_func.blocks.add()
-    pb_block.base_address = ilfunc[ilblock.start].address
+    pb_block.base_address = block.start
 
     # Gather all successor block addresses
-    follows = [ilfunc[edge.target].address for edge in ilblock.outgoing_edges]
+    follows = [edge.target for edge in block.outgoing_edges]
     pb_block.block_follows.extend(follows)
 
     return pb_block
@@ -332,26 +346,28 @@ def add_block(pb_func, ilfunc, ilblock):
 
 def recover_function(bv, pb_func, new_eas):
     # type: (binja.BinaryView, CFG_pb2.Function, set) -> None
-    ilfunc = bv.get_function_at(bv.platform, pb_func.entry_address).low_level_il
+    func = bv.get_function_at(bv.platform, pb_func.entry_address)
+    ilfunc = func.low_level_il
 
-    for ilblock in ilfunc:
-        pb_block = add_block(pb_func, ilfunc, ilblock)
-        prev_il = None
-        for il in ilblock:
-            # Sometimes an extra LLIL_GOTO will be inserted at the end of a block if it was split
-            # This has the same address as the instruction the block was split at, so skip it when this happens
-            if prev_il is not None and prev_il.address == il.address:
-                continue
+    for block in func:
+        pb_block = add_block(pb_func, block)
+
+        # Iterate through the block, keeping track of where we are
+        inst_idx = block.start
+        while inst_idx < block.end:
+            # Get the IL for the current instruction
+            il = ilfunc[func.get_low_level_il_at(bv.arch, inst_idx)]
 
             # Special case for LLIL_IF:
             # The cmp is contained in the operands, so add it before the branch
             if il.operation == binja.core.LLIL_IF:
                 ilcmp = il.condition
-                add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
+                pb_inst = add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
+                inst_idx += pb_inst.inst_len
 
             # Add the instruction data
-            add_inst(bv, pb_block, ilfunc, il, new_eas)
-            prev_il = il
+            pb_inst = add_inst(bv, pb_block, ilfunc, il, new_eas)
+            inst_idx += pb_inst.inst_len
 
 
 def add_function(pb_mod, addr):
