@@ -208,10 +208,11 @@ def handle_goto(bv, pb_inst, ilfunc, il):
 
         if not does_return(fname):
             DEBUG('Noreturn jmp: {}'.format(fname))
-            return pb_inst
+            return True
     else:
         DEBUG('Internal jmp: {:x}'.format(target))
         pb_inst.true_target = target
+    return False
 
 
 def add_call(bv, il, call_op, pb_inst, call_addr, new_eas):
@@ -275,7 +276,7 @@ def handle_call(bv, pb_inst, ilfunc, il, new_eas):
             add_call(bv, il, call_op, pb_inst, target, new_eas)
     else:
         # If this ever happens it should be handled
-        raise Exception('Unknown call op type: {} @ {:x}'.format(call_op.operation_name, il.address))
+        DEBUG('Unknown call op type: {} @ {:x}'.format(call_op.operation_name, il.address))
 
 
 def handle_jump_table(bv, pb_inst, ilfunc, il, new_eas):
@@ -349,8 +350,11 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
     # Fill in optional fields depending on the type of instruction
     op = il.operation
     if op == binja.core.LLIL_GOTO:
-        handle_goto(bv, pb_inst, ilfunc, il)
+        noreturn = handle_goto(bv, pb_inst, ilfunc, il)
 
+        # Return early if we jumped to a noreturn function
+        if noreturn:
+            return pb_inst
     elif op == binja.core.LLIL_IF:
         # Save the addresses of the true and false branches
         pb_inst.true_target = fix_branch_addr(ilfunc[il.true])
