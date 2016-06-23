@@ -20,8 +20,8 @@ EXTERNAL_NAMES = [
 ]
 
 ENDIAN_TO_STRUCT = {
-    0: '<',
-    1: '>'
+    binja.core.LittleEndian: '<',
+    binja.core.BigEndian: '>'
 }
 
 
@@ -179,8 +179,51 @@ def get_op_type(il, il_op):
     return 'MEM'
 
 
-def process_call(bv, il, call_op, pb_inst, call_addr, new_eas):
-    # type: (binja.BinaryView, binja.LowLevelILInstruction, binja.LowLevelILInstruction, CFG_pb2.Instruction, int, set) -> None
+def fix_branch_addr(il):
+    # type: (binja.LowLevelILInstruction) -> int
+    """
+    In the IL, all cmp's are contained inside single LLIL_IF instructions,
+    so whenever you branch to one of these, you actually want the address of
+    the cmp, not the LLIL_IF
+    """
+    if il.operation == binja.core.LLIL_IF:
+        return il.condition.address
+    return il.address
+
+
+def handle_goto(bv, pb_inst, ilfunc, il):
+    """
+    Args:
+        bv (binja.BinaryView)
+        pb_inst (CFG_pb2.Instruction)
+        ilfunc (binja.LowLevelILFunction)
+        il (binja.LowLevelILInstruction)
+    """
+    target = fix_branch_addr(ilfunc[il.dest])
+    if is_external_ref(bv, target):
+        DEBUG('External jmp: {:x}'.format(target))
+        jmp_func = bv.get_function_at(bv.platform, target)
+        fname = handle_external_ref(jmp_func.symbol.name)
+        pb_inst.ext_call_name = fname
+
+        if not does_return(fname):
+            DEBUG('Noreturn jmp: {}'.format(fname))
+            return pb_inst
+    else:
+        DEBUG('Internal jmp: {:x}'.format(target))
+        pb_inst.true_target = target
+
+
+def add_call(bv, il, call_op, pb_inst, call_addr, new_eas):
+    """
+    Args:
+        bv (binja.BinaryView)
+        il (binja.LowLevelILInstruction)
+        call_op (binja.LowLevelILInstruction)
+        pb_inst (CFG_pb2.Instruction)
+        call_addr (int)
+        new_eas (set)
+    """
     # Get the function at the given address
     call_func = bv.get_function_at(bv.platform, call_addr)
     if is_external_ref(bv, call_addr):
@@ -205,16 +248,78 @@ def process_call(bv, il, call_op, pb_inst, call_addr, new_eas):
             pb_inst.local_noreturn = True
 
 
-def fix_branch_addr(il):
-    # type: (binja.LowLevelILInstruction) -> int
+def handle_call(bv, pb_inst, ilfunc, il, new_eas):
     """
-    In the IL, all cmp's are contained inside single LLIL_IF instructions,
-    so whenever you branch to one of these, you actually want the address of
-    the cmp, not the LLIL_IF
+    Args:
+        bv (binja.BinaryView)
+        pb_inst (CFG_pb2.Instruction)
+        ilfunc (binja.LowLevelILFunction)
+        il (binja.LowLevelILInstruction)
+        new_eas (set)
     """
-    if il.operation == binja.core.LLIL_IF:
-        return il.condition.address
-    return il.address
+    # Get the operand for the call
+    call_op = il.dest
+    if call_op.operation == binja.core.LLIL_CONST:
+        # If the call is to an immediate symbol/address, process it as usual
+        call_addr = call_op.value
+        add_call(bv, il, call_op, pb_inst, call_addr, new_eas)
+    elif call_op.operation == binja.core.LLIL_REG:
+        # If the call is to a register, check if the value can be resolved
+        reg = call_op.src
+        reg_val = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, reg)
+
+        # Check if binja was able to statically resolve the value
+        if reg_val.type == binja.core.ConstantValue:
+            target = reg_val.value
+            DEBUG('Register call resolved: {} == {}'.format(reg, target))
+            add_call(bv, il, call_op, pb_inst, target, new_eas)
+    else:
+        # If this ever happens it should be handled
+        raise Exception('Unknown call op type: {} @ {:x}'.format(call_op.operation_name, il.address))
+
+
+def handle_jump_table(bv, pb_inst, ilfunc, il, new_eas):
+    """
+    Args:
+        bv (binja.BinaryView)
+        pb_inst (CFG_pb2.Instruction)
+        ilfunc (binja.LowLevelILFunction)
+        il (binja.LowLevelILInstruction)
+        new_eas (set)
+    """
+    # Get the base address of the jump table
+    base = search_displ_base(il.dest)
+    DEBUG('\tJMPTable base: {:x}'.format(base))
+
+    # Get the register that this jump table is based on
+    jump_reg = search_displ_reg(il.dest)
+
+    # Try to resolve the range of possible values for this register
+    jump_range = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, jump_reg)
+    if jump_range.type not in [binja.core.SignedRangeValue, binja.core.UnsignedRangeValue]:
+        raise Exception('Unable to resolve register range for jump table: {}@{:x}'.format(jump_reg, il.address))
+
+    # Pick the correct reader for this binary's address size
+    addrsize = bv.address_size
+    read_entry = {
+        4: read_dword,
+        8: read_qword
+    }[addrsize]
+
+    # Read in all of the table entries
+    for i in xrange(jump_range.start, jump_range.end + jump_range.step, jump_range.step):
+        jump_entry = read_entry(bv, i * addrsize + base)
+        pb_inst.jump_table.table_entries.append(jump_entry)
+
+        # Add this address to be recovered if it's the start of a function
+        if bv.get_function_at(bv.platform, jump_entry):
+            new_eas.add(jump_entry)
+
+        DEBUG('\t\tAdding JMPTable entry {}: {:x}'.format(i, jump_entry))
+
+    # Set to 0 for now
+    pb_inst.jump_table.zero_offset = 0
+    # TODO: jump_table.offset_from_data, need to know the start of the segment for this
 
 
 def read_inst_bytes(bv, il):
@@ -225,7 +330,17 @@ def read_inst_bytes(bv, il):
 
 
 def add_inst(bv, pb_block, ilfunc, il, new_eas):
-    # type: (binja.BinaryView, CFG_pb2.Block, binja.LowLevelILFunction, binja.LowLevelILInstruction, set) -> CFG_pb2.Instruction
+    """
+    Args:
+        bv (binja.BinaryView)
+        pb_block (CFG_pb2.Block)
+        ilfunc (binja.LowLevelILFunction)
+        il (binja.LowLevelILInstruction)
+        new_eas (set)
+
+    Returns:
+        CFG_pb2.Instruction
+    """
     pb_inst = pb_block.insts.add()
     pb_inst.inst_bytes = read_inst_bytes(bv, il)
     pb_inst.inst_addr = il.address
@@ -234,20 +349,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
     # Fill in optional fields depending on the type of instruction
     op = il.operation
     if op == binja.core.LLIL_GOTO:
-        # Single operand: target instruction idx
-        target = fix_branch_addr(ilfunc[il.dest])
-        if is_external_ref(bv, target):
-            DEBUG('External jmp: {:x}'.format(target))
-            jmp_func = bv.get_function_at(bv.platform, target)
-            fname = handle_external_ref(jmp_func.symbol.name)
-            pb_inst.ext_call_name = fname
-
-            if not does_return(fname):
-                DEBUG('Noreturn jmp: {}'.format(fname))
-                return pb_inst
-        else:
-            DEBUG('Internal jmp: {:x}'.format(target))
-            pb_inst.true_target = target
+        handle_goto(bv, pb_inst, ilfunc, il)
 
     elif op == binja.core.LLIL_IF:
         # Save the addresses of the true and false branches
@@ -255,25 +357,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         pb_inst.false_target = fix_branch_addr(ilfunc[il.false])
 
     elif op == binja.core.LLIL_CALL:
-        # Get the operand for the call
-        call_op = il.dest
-        if call_op.operation == binja.core.LLIL_CONST:
-            # If the call is to an immediate symbol/address, process it as usual
-            call_addr = call_op.value
-            process_call(bv, il, call_op, pb_inst, call_addr, new_eas)
-        elif call_op.operation == binja.core.LLIL_REG:
-            # If the call is to a register, check if the value can be resolved
-            reg = call_op.src
-            reg_val = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, reg)
-
-            # Check if binja was able to statically resolve the value
-            if reg_val.type == binja.core.ConstantValue:
-                target = reg_val.value
-                DEBUG('Register call resolved: {} == {}'.format(reg, target))
-                process_call(bv, il, call_op, pb_inst, target, new_eas)
-        else:
-            # If this ever happens it should be handled
-            raise Exception('Unknown call op type: {} @ {:x}'.format(call_op.operation_name, il.address))
+        handle_call(bv, pb_inst, ilfunc, il, new_eas)
 
     elif op == binja.core.LLIL_PUSH:
         isize = pb_inst.inst_len
@@ -293,41 +377,7 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
     elif op == binja.core.LLIL_JUMP_TO:
         # This is a jump to an entry in a jump table
         DEBUG('JMPTable instruction found @ {:x}'.format(il.address))
-
-        # Get the base address of the jump table
-        base = search_displ_base(il.dest)
-        DEBUG('\tJMPTable base: {:x}'.format(base))
-
-        # Get the register that this jump table is based on
-        jump_reg = search_displ_reg(il.dest)
-
-        # Try to resolve the range of possible values for this register
-        jump_range = ilfunc.source_function.get_reg_value_at(bv.arch, il.address, jump_reg)
-        if jump_range.type not in [binja.core.SignedRangeValue, binja.core.UnsignedRangeValue]:
-            DEBUG('Unable to resolve register range for jump table: {}@{:x}'.format(jump_reg, il.address))
-            return pb_inst
-
-        # Pick the correct reader for this binary's address size
-        addrsize = bv.address_size
-        read_entry = {
-            4: read_dword,
-            8: read_qword
-        }[addrsize]
-
-        # Read in all of the table entries
-        for i in xrange(jump_range.start, jump_range.end + jump_range.step, jump_range.step):
-            jump_entry = read_entry(bv, i * addrsize + base)
-            pb_inst.jump_table.table_entries.append(jump_entry)
-
-            # Add this address to be recovered if it's the start of a function
-            if bv.get_function_at(bv.platform, jump_entry):
-                new_eas.add(jump_entry)
-
-            DEBUG('\t\tAdding JMPTable entry {}: {:x}'.format(i, jump_entry))
-
-        # Set to 0 for now
-        pb_inst.jump_table.zero_offset = 0
-        # TODO: jump_table.offset_from_data, need to know the start of the segment for this
+        handle_jump_table(bv, pb_inst, ilfunc, il, new_eas)
 
     return pb_inst
 
