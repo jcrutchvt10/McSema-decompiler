@@ -360,7 +360,7 @@ def recover_function(bv, pb_func, new_eas):
 
             # Special case for LLIL_IF:
             # The cmp is contained in the operands, so add it before the branch
-            if il.operation == binja.core.LLIL_IF:
+            if il.operation == binja.core.LLIL_IF and il.address != inst_idx:
                 ilcmp = il.condition
                 pb_inst = add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
                 inst_idx += pb_inst.inst_len
