@@ -4,7 +4,7 @@ source env.sh
 
 rm -f sailboat.o sailboat_mine.o sailboat.cfg sailboat.bc sailboat_opt.bc sailboat_run.exe
 
-${CC} -O1 -ggdb -m32 -o sailboat.o sailboat.c
+${CC} -O2 -ggdb -m32 -o sailboat.o sailboat.c
 
 #Check if binja is available
 python -c 'import binaryninja' 2>>/dev/null
