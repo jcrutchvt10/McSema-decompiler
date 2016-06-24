@@ -179,18 +179,6 @@ def get_op_type(il, il_op):
     return 'MEM'
 
 
-def fix_branch_addr(il):
-    # type: (binja.LowLevelILInstruction) -> int
-    """
-    In the IL, all cmp's are contained inside single LLIL_IF instructions,
-    so whenever you branch to one of these, you actually want the address of
-    the cmp, not the LLIL_IF
-    """
-    if il.operation == binja.core.LLIL_IF:
-        return il.condition.address
-    return il.address
-
-
 def handle_goto(bv, pb_inst, ilfunc, il):
     """
     Args:
@@ -199,7 +187,7 @@ def handle_goto(bv, pb_inst, ilfunc, il):
         ilfunc (binja.LowLevelILFunction)
         il (binja.LowLevelILInstruction)
     """
-    target = fix_branch_addr(ilfunc[il.dest])
+    target = ilfunc[il.dest].address
     if is_external_ref(bv, target):
         DEBUG('External jmp: {:x}'.format(target))
         jmp_func = bv.get_function_at(bv.platform, target)
@@ -357,8 +345,8 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
             return pb_inst
     elif op == binja.core.LLIL_IF:
         # Save the addresses of the true and false branches
-        pb_inst.true_target = fix_branch_addr(ilfunc[il.true])
-        pb_inst.false_target = fix_branch_addr(ilfunc[il.false])
+        pb_inst.true_target = ilfunc[il.true].address
+        pb_inst.false_target = ilfunc[il.false].address
 
     elif op == binja.core.LLIL_CALL:
         handle_call(bv, pb_inst, ilfunc, il, new_eas)
@@ -411,13 +399,6 @@ def recover_function(bv, pb_func, new_eas):
         while inst_idx < block.end:
             # Get the IL for the current instruction
             il = ilfunc[func.get_lifted_il_at(bv.arch, inst_idx)]
-
-            # Special case for LLIL_IF:
-            # The cmp is contained in the operands, so add it before the branch
-            if il.operation == binja.core.LLIL_IF and il.address != inst_idx:
-                ilcmp = il.condition
-                pb_inst = add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
-                inst_idx += pb_inst.inst_len
 
             # Add the instruction data
             pb_inst = add_inst(bv, pb_block, ilfunc, il, new_eas)
