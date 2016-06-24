@@ -359,12 +359,13 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
         if isize == 5 and target == il.address + 5:
             DEBUG('Internal call $+5: {:x}'.format(target))
             pb_inst.local_noreturn = True
+            pb_inst.imm_reference = target
+            pb_inst.imm_ref_type = CFG_pb2.Instruction.CodeRef
 
-            if target not in RECOVERED:
+            # If the next address is a function, add it to be recovered
+            if bv.get_function_at(bv.platform, target):
                 DEBUG('Adding EA from self call: {:x}'.format(target))
                 new_eas.add(target)
-                pb_inst.imm_reference = target
-                pb_inst.imm_ref_type = CFG_pb2.Instruction.CodeRef
 
     elif op == binja.core.LLIL_JUMP_TO:
         # This is a jump to an entry in a jump table
