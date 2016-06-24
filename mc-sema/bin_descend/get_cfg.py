@@ -401,7 +401,7 @@ def add_block(pb_func, block):
 def recover_function(bv, pb_func, new_eas):
     # type: (binja.BinaryView, CFG_pb2.Function, set) -> None
     func = bv.get_function_at(bv.platform, pb_func.entry_address)
-    ilfunc = func.low_level_il
+    ilfunc = func.lifted_il
 
     for block in func:
         pb_block = add_block(pb_func, block)
@@ -410,7 +410,7 @@ def recover_function(bv, pb_func, new_eas):
         inst_idx = block.start
         while inst_idx < block.end:
             # Get the IL for the current instruction
-            il = ilfunc[func.get_low_level_il_at(bv.arch, inst_idx)]
+            il = ilfunc[func.get_lifted_il_at(bv.arch, inst_idx)]
 
             # Special case for LLIL_IF:
             # The cmp is contained in the operands, so add it before the branch
@@ -418,11 +418,6 @@ def recover_function(bv, pb_func, new_eas):
                 ilcmp = il.condition
                 pb_inst = add_inst(bv, pb_block, ilfunc, ilcmp, new_eas)
                 inst_idx += pb_inst.inst_len
-            elif il.address != inst_idx:
-                # This is probably a nop, skip it
-                DEBUG('Addresses do not line up, assuming NOP, skipping: x86: {:x}, IL: {:x}'.format(inst_idx, il.address))
-                inst_idx += bv.get_instruction_length(bv.arch, inst_idx)
-                continue
 
             # Add the instruction data
             pb_inst = add_inst(bv, pb_block, ilfunc, il, new_eas)
