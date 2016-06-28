@@ -131,7 +131,6 @@ def is_external_ref(bv, addr):
     # type: (binja.BinaryView, int) -> bool
     sym = bv.get_symbol_at(addr)
     if sym is None:
-        DEBUG("Couldn't get symbol for addr: {:x}".format(addr))
         return False
 
     # This is temporary until we can access different segments in binja
@@ -160,23 +159,50 @@ def set_reference(pb_inst, op_type, ref_type, ref):
         DEBUG('Unknown ref type: {}'.format(op_type))
 
 
-def get_op_type(il, il_op):
-    # type: (binja.LowLevelILInstruction, binja.LowLevelILInstruction) -> str
+def is_lea(bv, il):
+    # type: (binja.BinaryView, binja.LowLevelILInstruction) -> bool
+    txt = get_inst_text(bv, il.address)
+    return 'lea' in txt[0].text
 
-    if il_op.operation == binja.core.LLIL_CONST:
-        # A constant (instead of LLIL_LOAD) may still be a memory address
-        # Check if any of the following instructions use this operand
-        if il.operation in [binja.core.LLIL_CALL]:
-            # TODO: Is there a better way to check this? LLIL_SET_REG uses a constant even if it is memory access
-            return 'MEM'
-        # Special cases aside, this is an immediate value
-        return 'IMM'
-    elif il_op.operation == binja.core.LLIL_LOAD:
-        # LLIL_LOAD covers any kind of loading from memory
-        # i.e. direct address, phrase, displacement
-        return 'MEM'
-    # Assume MEM otherwise
-    return 'MEM'
+
+def resolve_refs(bv, pb_inst, il, op_type=None):
+    # type: (binja.BinaryView, CFG_pb2.Instruction, binja.LowLevelILInstruction) -> None
+    if not isinstance(il, binja.LowLevelILInstruction):
+        return
+
+    if il.operation == binja.core.LLIL_CONST:
+        # Get the op type for this value
+        if op_type is None:
+            # Binja treats lea as a regular LLIL_SET_REG
+            # Need to make sure it's a MEM reference
+            if is_lea(bv, il):
+                op_type = 'MEM'
+            else:
+                # Otherwise any constant is an immediate
+                op_type = 'IMM'
+
+        # Assume that a value outside the binary range is not an address
+        ref = il.value
+        if bv.start <= ref <= bv.end:
+            # TODO: check segments when available in api
+            # Right now we check if the reference is code by checking
+            # if that address happens to be a function
+            if bv.get_function_at(bv.platform, ref):
+                ref_type = CFG_pb2.Instruction.CodeRef
+            else:
+                ref_type = CFG_pb2.Instruction.DataRef
+
+            DEBUG('Setting {} reference @ {:x} to {:x}'.format(op_type, il.address, ref))
+            set_reference(pb_inst, op_type, ref_type, ref)
+
+    elif il.operation == binja.core.LLIL_STORE:
+        resolve_refs(bv, pb_inst, il.dest, 'MEM')
+        resolve_refs(bv, pb_inst, il.src)
+    elif il.operation == binja.core.LLIL_LOAD:
+        resolve_refs(bv, pb_inst, il.src, 'MEM')
+    else:
+        for op in il.operands:
+            resolve_refs(bv, pb_inst, op, op_type)
 
 
 def handle_goto(bv, pb_inst, ilfunc, il):
@@ -196,19 +222,14 @@ def handle_goto(bv, pb_inst, ilfunc, il):
 
         if not does_return(fname):
             DEBUG('Noreturn jmp: {}'.format(fname))
-            return True
     else:
-        DEBUG('Internal jmp: {:x}'.format(target))
         pb_inst.true_target = target
-    return False
 
 
-def add_call(bv, il, call_op, pb_inst, call_addr, new_eas):
+def add_call(bv, pb_inst, call_addr, new_eas):
     """
     Args:
         bv (binja.BinaryView)
-        il (binja.LowLevelILInstruction)
-        call_op (binja.LowLevelILInstruction)
         pb_inst (CFG_pb2.Instruction)
         call_addr (int)
         new_eas (set)
@@ -225,8 +246,7 @@ def add_call(bv, il, call_op, pb_inst, call_addr, new_eas):
         DEBUG('Internal call: {}'.format(call_func.symbol.name))
 
         # Add a reference to the called address
-        op_type = get_op_type(il, call_op)
-        set_reference(pb_inst, op_type, CFG_pb2.Instruction.CodeRef, call_addr)
+        set_reference(pb_inst, 'MEM', CFG_pb2.Instruction.CodeRef, call_addr)
 
         # Save this address to recover it later
         new_eas.add(call_addr)
@@ -251,7 +271,7 @@ def handle_call(bv, pb_inst, ilfunc, il, new_eas):
     if call_op.operation == binja.core.LLIL_CONST:
         # If the call is to an immediate symbol/address, process it as usual
         call_addr = call_op.value
-        add_call(bv, il, call_op, pb_inst, call_addr, new_eas)
+        add_call(bv, pb_inst, call_addr, new_eas)
     elif call_op.operation == binja.core.LLIL_REG:
         # If the call is to a register, check if the value can be resolved
         reg = call_op.src
@@ -261,7 +281,7 @@ def handle_call(bv, pb_inst, ilfunc, il, new_eas):
         if reg_val.type == binja.core.ConstantValue:
             target = reg_val.value
             DEBUG('Register call resolved: {} == {}'.format(reg, target))
-            add_call(bv, il, call_op, pb_inst, target, new_eas)
+            add_call(bv, pb_inst, target, new_eas)
     else:
         # If this ever happens it should be handled
         DEBUG('Unknown call op type: {} @ {:x}'.format(call_op.operation_name, il.address))
@@ -311,6 +331,12 @@ def handle_jump_table(bv, pb_inst, ilfunc, il, new_eas):
     # TODO: jump_table.offset_from_data, need to know the start of the segment for this
 
 
+def get_inst_text(bv, addr):
+    # type: (binja.BinaryView, int) -> list
+    data = bv.read(addr, 16)
+    return bv.arch.get_instruction_text(data, addr)[0]
+
+
 def read_inst_bytes(bv, il):
     # type: (binja.BinaryView, binja.LowLevelILInstruction) -> str
     inst_data = bv.read(il.address, 16)
@@ -338,18 +364,18 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
     # Fill in optional fields depending on the type of instruction
     op = il.operation
     if op == binja.core.LLIL_GOTO:
-        noreturn = handle_goto(bv, pb_inst, ilfunc, il)
+        handle_goto(bv, pb_inst, ilfunc, il)
+        return pb_inst
 
-        # Return early if we jumped to a noreturn function
-        if noreturn:
-            return pb_inst
     elif op == binja.core.LLIL_IF:
         # Save the addresses of the true and false branches
         pb_inst.true_target = ilfunc[il.true].address
         pb_inst.false_target = ilfunc[il.false].address
+        return pb_inst
 
     elif op == binja.core.LLIL_CALL:
         handle_call(bv, pb_inst, ilfunc, il, new_eas)
+        return pb_inst
 
     elif op == binja.core.LLIL_PUSH:
         isize = pb_inst.inst_len
@@ -366,11 +392,16 @@ def add_inst(bv, pb_block, ilfunc, il, new_eas):
             if bv.get_function_at(bv.platform, target):
                 DEBUG('Adding EA from self call: {:x}'.format(target))
                 new_eas.add(target)
+            return pb_inst
 
     elif op == binja.core.LLIL_JUMP_TO:
         # This is a jump to an entry in a jump table
         DEBUG('JMPTable instruction found @ {:x}'.format(il.address))
         handle_jump_table(bv, pb_inst, ilfunc, il, new_eas)
+        return pb_inst
+
+    # Resolve any references in this instruction
+    resolve_refs(bv, pb_inst, il)
 
     return pb_inst
 
