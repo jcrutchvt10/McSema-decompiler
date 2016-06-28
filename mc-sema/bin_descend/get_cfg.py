@@ -166,7 +166,20 @@ def is_lea(bv, il):
 
 
 def resolve_refs(bv, pb_inst, il, op_type=None):
-    # type: (binja.BinaryView, CFG_pb2.Instruction, binja.LowLevelILInstruction) -> None
+    """
+    Recursively searches through an IL instruction's operands for any
+    code/data references. Keeps track of whether the reference is a memory
+    reference or an immediate value. When a reference is found, its
+    info is added to the protobuf
+
+    Args:
+        bv (binja.BinaryView)
+        pb_inst (CFG_pb2.Instruction)
+        il (binja.LowLevelILInstruction)
+        op_type (str)
+    """
+
+    # Skip strings, indices, etc
     if not isinstance(il, binja.LowLevelILInstruction):
         return
 
@@ -196,11 +209,14 @@ def resolve_refs(bv, pb_inst, il, op_type=None):
             set_reference(pb_inst, op_type, ref_type, ref)
 
     elif il.operation == binja.core.LLIL_STORE:
+        # The destination is known to be MEM, src is unknown
         resolve_refs(bv, pb_inst, il.dest, 'MEM')
         resolve_refs(bv, pb_inst, il.src)
     elif il.operation == binja.core.LLIL_LOAD:
+        # The src is known to be MEM
         resolve_refs(bv, pb_inst, il.src, 'MEM')
     else:
+        # All other instructions, go through all operands and propagate the op_type
         for op in il.operands:
             resolve_refs(bv, pb_inst, op, op_type)
 
