@@ -15,10 +15,6 @@ EXT_DATA_MAP = {}
 EXTERNALS = set()
 RECOVERED = set()
 
-EXTERNAL_NAMES = [
-    '@@GLIBC_'
-]
-
 ENDIAN_TO_STRUCT = {
     binja.core.LittleEndian: '<',
     binja.core.BigEndian: '>'
@@ -33,18 +29,18 @@ def DEBUG(s):
 def process_externals(pb_mod):
     # type: (CFG_pb2.Module) -> None
     for ext in EXTERNALS:
-        if fixed_in_map(ext, EXT_MAP):
-            argc, conv, ret, sign = get_from_ext_map(ext)
+        if ext in EXT_MAP:
+            argc, conv, ret, sign = EXT_MAP[ext]
 
             # Save the external function info to the module
             pb_extfn = pb_mod.external_funcs.add()
-            pb_extfn.symbol_name = fix_external_name(ext)
+            pb_extfn.symbol_name = ext
             pb_extfn.argument_count = argc
             pb_extfn.calling_convention = conv
             pb_extfn.has_return = ret == 'N'
             pb_extfn.no_return = ret == 'Y'
-        elif fixed_in_map(ext, EXT_DATA_MAP):
-            dname = fix_external_name(ext)
+        elif ext in EXT_DATA_MAP:
+            dname = ext
             dsize = EXT_DATA_MAP[dname]
 
             # Save the data info to the module
@@ -112,8 +108,8 @@ def search_displ_base(il):
 def does_return(fname):
     # type: (str) -> bool
     # Try to find this function in the externals map
-    if fixed_in_map(fname, EXT_MAP):
-        argc, conv, ret, sign = get_from_ext_map(fname)
+    if fname in EXT_MAP:
+        argc, conv, ret, sign = EXT_MAP[fname]
         return ret == 'N'
     # If it isn't there, assume it returns
     return True
@@ -122,9 +118,8 @@ def does_return(fname):
 def handle_external_ref(fname):
     # type: (str) -> str
     # Fix and save the external's name
-    fixed = fix_external_name(fname)
-    EXTERNALS.add(fixed)
-    return fixed
+    EXTERNALS.add(fname)
+    return fname
 
 
 def is_external_ref(bv, addr):
@@ -135,14 +130,8 @@ def is_external_ref(bv, addr):
 
     # This is temporary until we can access different segments in binja
     # Doesn't work for Mach-O because binja treats all functions as imports
-    if 'Imported' in sym.type:
+    if 'Import' in sym.type:
         return True
-
-    # Check if any external names are in the symbol
-    for extsign in EXTERNAL_NAMES:
-        if extsign in sym.name:
-            DEBUG('Assuming external reference because: {} in {}'.format(extsign, sym.name))
-            return True
 
     return False
 
@@ -233,7 +222,7 @@ def handle_goto(bv, pb_inst, ilfunc, il):
     if is_external_ref(bv, target):
         DEBUG('External jmp: {:x}'.format(target))
         jmp_func = bv.get_function_at(bv.platform, target)
-        fname = handle_external_ref(jmp_func.symbol.name)
+        fname = handle_external_ref(jmp_func.symbol.short_name)
         pb_inst.ext_call_name = fname
 
         if not does_return(fname):
@@ -253,13 +242,13 @@ def add_call(bv, pb_inst, call_addr, new_eas):
     # Get the function at the given address
     call_func = bv.get_function_at(bv.platform, call_addr)
     if is_external_ref(bv, call_addr):
-        fname = handle_external_ref(call_func.symbol.name)
+        fname = handle_external_ref(call_func.symbol.short_name)
         pb_inst.ext_call_name = fname
 
         if not does_return(fname):
             DEBUG('Noreturn call: {}'.format(fname))
     else:
-        DEBUG('Internal call: {}'.format(call_func.symbol.name))
+        DEBUG('Internal call: {}'.format(call_func.symbol.short_name))
 
         # Add a reference to the called address
         set_reference(pb_inst, 'MEM', CFG_pb2.Instruction.CodeRef, call_addr)
@@ -460,51 +449,14 @@ def add_function(pb_mod, addr):
     return pb_func
 
 
-def fix_external_name(name):
-    # type: (str) -> str
-    # Don't do anything if the name is already in the maps
-    if name in EXT_MAP or name in EXT_DATA_MAP:
-        return name
-
-    # TODO: unlinked elf case
-
-    # Check for common cases
-    if name.endswith('_0'):
-        fixed = name[:-2]
-        if fixed in EXT_MAP:
-            return fixed
-
-    if name.startswith('__imp_'):
-        fixed = name[6:]
-        if fixed in EXT_MAP:
-            return fixed
-
-    # Check for any external names in the symbol and remove them
-    for extName in EXTERNAL_NAMES:
-        if extName in name:
-            name = name[:name.find(extName)]
-            break
-    return name
-
-
-def fixed_in_map(name, ext_map):
-    # type: (str) -> bool
-    return fix_external_name(name) in ext_map
-
-
-def get_from_ext_map(name):
-    # type: (str) -> (int, int, chr, str)
-    return EXT_MAP[fix_external_name(name)]
-
-
 def get_export_type(bv, name, addr):
     # type: (binja.BinaryView, str, int) -> (int, int, chr)
     DEBUG('Processing export name: {} @ {:x}'.format(name, addr))
 
     # All externals should ideally be defined in the std_defs file
-    if fixed_in_map(name, EXT_MAP):
+    if name in EXT_MAP:
         DEBUG('Export found in std_defs')
-        argc, conv, ret, sign = get_from_ext_map(name)
+        argc, conv, ret, sign = EXT_MAP[name]
     else:
         # Attempt to figure out the information from the binary
         # It's best to have this defined already
@@ -623,7 +575,7 @@ def process_defs_file(f):
 def filter_entries(bv, symbols):
     # type: (binja.BinaryView, list) -> dict
     """ Filters out any function symbols that are not in the binary """
-    func_syms = [func.symbol.name for func in bv.functions]
+    func_syms = [func.symbol.short_name for func in bv.functions]
     filtered = {}
     for symb in symbols:
         if symb in func_syms:
@@ -636,7 +588,7 @@ def filter_entries(bv, symbols):
 def get_all_exports(bv):
     # type: (binja.BinaryView) -> dict
     # TODO: Find all exports (not in api)
-    return {bv.entry_function.symbol.name: bv.entry_point}
+    return {bv.entry_function.symbol.short_name: bv.entry_point}
 
 
 def main():
