@@ -658,8 +658,7 @@ def main():
 
     # Load and analyze the binary
     bv = bv_type.open(filepath)
-    bv.update_analysis()
-    time.sleep(0.1)  # May need to be changed
+    bv.update_analysis_and_wait()
 
     # NOTE: at the moment binja will not load a binary
     # that doesn't have an entry point
