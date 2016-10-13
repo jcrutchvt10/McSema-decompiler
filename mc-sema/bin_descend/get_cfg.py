@@ -8,12 +8,14 @@ import magic
 import time
 import CFG_pb2
 
+from typing import List, Set, Dict, Tuple, Text, Optional
+
 _DEBUG = False
 
-EXT_MAP = {}
-EXT_DATA_MAP = {}
-EXTERNALS = set()
-RECOVERED = set()
+EXT_MAP = {} # type: Dict[str, Tuple[int,int,str,str]]
+EXT_DATA_MAP = {} # type: Dict[str, int]
+EXTERNALS = set() # type: Set[str]
+RECOVERED = set() # type: Set[int]
 
 ENDIAN_TO_STRUCT = {
     binja.core.LittleEndian: '<',
@@ -450,7 +452,7 @@ def add_function(pb_mod, addr):
 
 
 def get_export_type(bv, name, addr):
-    # type: (binja.BinaryView, str, int) -> (int, int, chr)
+    # type: (binja.BinaryView, str, int) -> Tuple[int, int, str]
     DEBUG('Processing export name: {} @ {:x}'.format(name, addr))
 
     # All externals should ideally be defined in the std_defs file
@@ -488,7 +490,7 @@ def process_entry_point(bv, pb_mod, name, addr):
 
 
 def recover_cfg(bv, entries, outf):
-    # type: (binja.BinaryView, dict, file) -> None
+    # type: (binja.BinaryView, dict, binja.BinaryIO) -> None
     pb_mod = CFG_pb2.Module()
     pb_mod.module_name = os.path.basename(bv.file.filename)
     DEBUG('PROCESSING: {}'.format(pb_mod.module_name))
@@ -496,7 +498,7 @@ def recover_cfg(bv, entries, outf):
     # TODO: segment related processing (not in api)
 
     # Process the main entry points
-    new_eas = set()
+    new_eas = set() # type: Set[int]
     for fname, faddr in entries.iteritems():
         DEBUG('Recovering: {}'.format(fname))
 
@@ -673,7 +675,7 @@ def main():
             process_defs_file(dfile)
 
     # Gather all exports to be lifted
-    epoints = {}
+    epoints = {} # type: Dict[str, int]
     if args.exports_to_lift:
         lines = [l.strip() for l in args.exports_to_lift.readlines()]
         epoints = filter_entries(bv, lines)
