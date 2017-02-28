@@ -44,6 +44,7 @@
 #include <llvm/Support/ToolOutputFile.h>
 
 #include "mcsema/Arch/Arch.h"
+#include "mcsema/BC/DeadRegElimination.h"
 #include "mcsema/BC/Util.h"
 
 #include "mcsema/cfgToLLVM/ArchOps.h"
@@ -110,7 +111,6 @@ int main(int argc, char *argv[]) {
 
   auto triple = M->getTargetTriple();
 
-  //reproduce NativeModule from CFG input argument
   try {
     auto mod = ReadProtoBuf(InputFilename);
     if (!mod) {
@@ -118,8 +118,8 @@ int main(int argc, char *argv[]) {
       return EXIT_FAILURE;
     }
 
-    //now, convert it to an LLVM module
     ArchInitAttachDetach(M);
+    InitDeadRegisterEliminator(M);
 
     if (!LiftCodeIntoModule(mod, M)) {
       std::cerr << "Failure to convert to LLVM module!" << std::endl;
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
                   << entry_point_name << " is implemented by sub_" << std::hex
                   << entry_pc << std::endl;
 
-        if ( !ArchAddEntryPointDriver(M, entry_point_name, entry_pc)) {
+        if (!ArchAddEntryPointDriver(M, entry_point_name, entry_pc)) {
           return EXIT_FAILURE;
         }
 

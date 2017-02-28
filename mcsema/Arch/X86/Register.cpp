@@ -308,8 +308,6 @@ void X86AllocRegisterVars(llvm::BasicBlock *b) {
         llvm::PointerType::get(info.read_type, 0),
         read_var_name, b);
   }
-//  b->dump();
-//  exit(0);
 }
 
 unsigned X86RegisterSize(MCSemaRegs reg) {

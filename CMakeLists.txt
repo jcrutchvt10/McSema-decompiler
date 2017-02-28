@@ -66,6 +66,7 @@ add_executable(mcsema-lift
   ${MCSEMA_DIR}/mcsema/Arch/Arch.cpp
   ${MCSEMA_DIR}/mcsema/Arch/X86/Register.cpp
   ${MCSEMA_DIR}/mcsema/Arch/X86/Dispatch.cpp
+  ${MCSEMA_DIR}/mcsema/BC/DeadRegElimination.cpp
   ${MCSEMA_DIR}/mcsema/BC/Util.cpp
   ${MCSEMA_DIR}/mcsema/CFG/CFG.cpp
   ${MCSEMA_DIR}/generated/CFG.pb.cc

@@ -45,7 +45,7 @@
 #include <vector>
 
 #include "mcsema/Arch/Dispatch.h"
-
+#include "mcsema/BC/DeadRegElimination.h"
 #include "mcsema/cfgToLLVM/raiseX86.h"
 #include "mcsema/cfgToLLVM/x86Instrs.h"
 #include "mcsema/cfgToLLVM/x86Helpers.h"
@@ -508,6 +508,9 @@ static bool InsertFunctionIntoModule(NativeModulePtr mod,
     ctx.natB = block_info.second;
     error = LiftBlockIntoFunction(ctx) || error;
   }
+
+  // Do some simple optimizations of the function.
+  OptimizeFunction(F);
 
   // For ease of debugging generated code, don't allow lifted functions to
   // be inlined. This will make lifted and native call graphs one-to-one.
