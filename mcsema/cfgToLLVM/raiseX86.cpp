@@ -229,7 +229,7 @@ void GENERIC_MC_WRITEREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
     }
   }
 
-  (void) new llvm::StoreInst(val, reg_ptr, "", B);
+  (void) new llvm::StoreInst(val, reg_ptr, "", false, B);
 }
 
 llvm::Value *GENERIC_MC_READREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,

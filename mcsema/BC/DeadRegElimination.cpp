@@ -86,7 +86,7 @@ static OffsetMap GetOffsets(llvm::Function *func) {
             made_progress = true;
           }
 
-        } else if (auto cast = llvm::dyn_cast<llvm::CastInst>(&inst)) {
+        } else if (auto cast = llvm::dyn_cast<llvm::BitCastInst>(&inst)) {
           auto base = cast->getOperand(0);
           if (offset.count(base)) {
             offset[cast] = offset[base];
@@ -161,14 +161,9 @@ static void LocalOptimizeBlock(llvm::BasicBlock *block, OffsetMap &map) {
       auto size = layout.getTypeStoreSize(load->getType());
 
       // Load-to-load forwarding.
-      if (false && next_load && next_load->getType() == load->getType()) {
-        block->dump();
-        load->dump();
-        next_load->dump();
-        std::cerr << std::endl;
-//        exit(1);
-//        next_load->replaceAllUsesWith(load);
-//        to_remove.insert(next_load);
+      if (next_load && next_load->getType() == load->getType()) {
+        next_load->replaceAllUsesWith(load);
+        to_remove.insert(next_load);
       }
 
       next_load = load;
