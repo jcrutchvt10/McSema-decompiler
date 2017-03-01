@@ -12,6 +12,7 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
@@ -21,28 +22,38 @@
 #include "mcsema/BC/DeadRegElimination.h"
 
 namespace {
-using LocalGenSet = std::bitset<128>;
-using LocalKillSet = std::bitset<128>;
+
+using RegSet = std::bitset<128>;
 using OffsetMap = std::unordered_map<llvm::Value *, unsigned>;
 
 struct BlockState {
   // 1 if this block uses the register without defining it first, 0 if we
-  // have no information.
-  LocalGenSet gen;
+  // have no information. This is the set of registers where the incoming
+  // values from predecessors is needed.
+  RegSet live_on_entry;
 
-  // 0 if this block defines the register without using it first, 1 if we
-  // have no information, or if it is live.
-  LocalKillSet kill_mask;
+  // 1 if this block defines the register, 0 if we have no information
+  // (even if it is loaded). We can use this to kill any `live_on_entry` regs
+  // coming from successors, before merging in the `live_on_entry` for a
+  // data-flow propagation.
+  RegSet killed_in_block;
 };
 
 struct FunctionState {
   std::unordered_map<llvm::Instruction *, unsigned> offsets;
 };
 
+// Tracks register
 static std::vector<size_t> gByteOffsetToRegOffset;
 static std::vector<unsigned> gByteOffsetToBeginOffset;
 static std::vector<unsigned> gByteOffsetToRegSize;
-static std::unordered_map<llvm::BasicBlock *, BlockState *> gBlockState;
+
+static std::unordered_map<llvm::BasicBlock *, BlockState> gBlockState;
+
+// Alias scopes, used to mark accesses to the reg state struct and memory as
+// being within disjoint alias scopes.
+static llvm::MDNode *gRegStateScope = nullptr;
+static llvm::MDNode *gMemoryScope = nullptr;
 
 // Get the index sequence of a GEP instruction. For GEPs that access the system
 // register state, this allows us to index into the `system_regs` map in order
@@ -134,17 +145,25 @@ static void LocalOptimizeBlock(llvm::BasicBlock *block, OffsetMap &map) {
   std::unordered_map<size_t, llvm::LoadInst *> load_forwarding;
 
   BlockState state;
-  state.gen.reset();
-  state.kill_mask.set();
+  state.live_on_entry.reset();
+  state.killed_in_block.reset();
+
+  RegSet local_dead;
+  local_dead.reset();
 
   std::unordered_set<llvm::Instruction *> to_remove;
   for (auto inst_rev = block->rbegin(); inst_rev != block->rend(); ++inst_rev) {
     auto inst = &*inst_rev;
 
-    // Call out to another function.
+    // Call out to another function; need to be really conservative here until
+    // we apply a global alias analysis.
+    //
+    // TODO(pag): Apply some ABI stuff here when dealing with calls to externals
+    //            or calls through pointers.
     if (llvm::isa<llvm::CallInst>(inst)) {
-      state.gen.reset();
-      state.kill_mask.set();
+      state.live_on_entry.reset();
+      state.killed_in_block.reset();
+      local_dead.reset();
       load_forwarding.clear();
     }
 
@@ -167,8 +186,8 @@ static void LocalOptimizeBlock(llvm::BasicBlock *block, OffsetMap &map) {
       }
 
       next_load = load;
-      state.gen.set(reg_num);
-      state.kill_mask.set(reg_num);
+      state.live_on_entry.set(reg_num);
+      local_dead.reset(reg_num);
 
     } else if (auto store = llvm::dyn_cast<llvm::StoreInst>(inst)) {
       auto stored_val = inst->getOperand(0);
@@ -177,18 +196,20 @@ static void LocalOptimizeBlock(llvm::BasicBlock *block, OffsetMap &map) {
       auto &next_load = load_forwarding[reg_num];
 
       // Dead store elimination.
-      if (!state.kill_mask.test(reg_num)) {
+      if (local_dead.test(reg_num)) {
         to_remove.insert(store);
 
       // Partial store, possible false write-after-read dependency, has to
       // revive the register.
       } else if (size != reg_size) {
-        state.gen.set(reg_num);
-        state.kill_mask.set(reg_num);
+        state.live_on_entry.set(reg_num);
+        local_dead.reset(reg_num);
 
-      } else {  // Full store, kills the reg.
-        state.gen.reset(reg_num);
-        state.kill_mask.reset(reg_num);
+      // Full store, kills the reg.
+      } else {
+        state.live_on_entry.reset(reg_num);
+        state.killed_in_block.set(reg_num);
+        local_dead.set(reg_num);
 
         // Store-to-load forwarding.
         if (next_load && next_load->getType() == stored_val_type) {
@@ -204,11 +225,16 @@ static void LocalOptimizeBlock(llvm::BasicBlock *block, OffsetMap &map) {
   for (auto dead_inst : to_remove) {
     dead_inst->eraseFromParent();
   }
+
+  gBlockState[block] = state;
 }
 
 }  // namespace
 
-void InitDeadRegisterEliminator(llvm::Module *module) {
+void InitDeadRegisterEliminator(llvm::Module *module, size_t num_funcs,
+                                size_t num_blocks) {
+  gBlockState.reserve(num_blocks);
+
   llvm::DataLayout layout(module);
 
   auto state_type = ArchRegStateStructType();

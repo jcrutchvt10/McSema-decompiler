@@ -112,14 +112,15 @@ int main(int argc, char *argv[]) {
   auto triple = M->getTargetTriple();
 
   try {
-    auto mod = ReadProtoBuf(InputFilename);
+    DecodeStats info = {};
+    auto mod = ReadProtoBuf(InputFilename, &info);
     if (!mod) {
       std::cerr << "Unable to read module from CFG" << std::endl;
       return EXIT_FAILURE;
     }
 
     ArchInitAttachDetach(M);
-    InitDeadRegisterEliminator(M);
+    InitDeadRegisterEliminator(M, info.num_funcs, info.num_funcs);
 
     if (!LiftCodeIntoModule(mod, M)) {
       std::cerr << "Failure to convert to LLVM module!" << std::endl;

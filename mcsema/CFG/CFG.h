@@ -413,4 +413,9 @@ enum ModuleInputFormat {
   ProtoBuff
 };
 
-NativeModulePtr ReadProtoBuf(const std::string &file_name);
+struct DecodeStats {
+  size_t num_funcs;
+  size_t num_blocks;
+};
+
+NativeModulePtr ReadProtoBuf(const std::string &file_name, DecodeStats *info);

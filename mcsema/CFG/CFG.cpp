@@ -42,6 +42,12 @@
 #include "mcsema/cfgToLLVM/Externals.h"
 #include "mcsema/cfgToLLVM/JumpTables.h"
 
+namespace {
+
+static DecodeStats gInfo = {};
+
+}  // namespace
+
 bool NativeInst::terminator(void) const {
   return this->is_terminator;
 }
@@ -987,6 +993,8 @@ static NativeFunctionPtr DeserializeNativeFunc(
     const ::Function &func,
     const std::list<ExternalCodeRefPtr> &extcode) {
 
+  gInfo.num_funcs++;
+
   NativeFunction *nf = nullptr;
   if (func.has_symbol_name() && !func.symbol_name().empty()) {
     nf = new NativeFunction(func.entry_address(), func.symbol_name());
@@ -997,6 +1005,7 @@ static NativeFunctionPtr DeserializeNativeFunc(
   //read all the blocks from this function
   for (auto &block : func.blocks()) {
     auto native_block = deserializeBlock(block, extcode);
+    gInfo.num_blocks++;
     if (!native_block) {
       std::cerr
           << "Unable to deserialize function at " << std::hex
@@ -1136,8 +1145,11 @@ static void DeserializeData(const ::Data &d, DataSection &ds) {
   }
 }
 
-NativeModulePtr ReadProtoBuf(const std::string &file_name) {
+NativeModulePtr ReadProtoBuf(const std::string &file_name, DecodeStats *info) {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
+
+  gInfo.num_blocks = 0;
+  gInfo.num_funcs = 0;
 
   NativeModulePtr m;
   ::Module proto;
@@ -1145,13 +1157,13 @@ NativeModulePtr ReadProtoBuf(const std::string &file_name) {
   std::ifstream fstream(file_name, std::ios::binary);
   if (!fstream.good()) {
     std::cerr << "Failed to open file " << file_name << std::endl;
-    return m;
+    return nullptr;
   }
 
   //read the protobuf object in
   if (!proto.ParseFromIstream(&fstream)) {
     std::cerr << "Failed to deserialize protobuf module" << std::endl;
-    return m;
+    return nullptr;
   }
 
   std::unordered_map<VA, NativeFunctionPtr> native_funcs;
@@ -1240,5 +1252,6 @@ NativeModulePtr ReadProtoBuf(const std::string &file_name) {
   }
 
   std::cerr << "Returning modue..." << std::endl;
+  *info = gInfo;
   return m;
 }

@@ -8,7 +8,8 @@ class Function;
 class Module;
 }
 
-void InitDeadRegisterEliminator(llvm::Module *module);
+void InitDeadRegisterEliminator(llvm::Module *module, size_t num_funcs,
+                                size_t num_blocks);
 
 void OptimizeFunction(llvm::Function *func);
 
