@@ -28,7 +28,7 @@
 #include "mcsema/Arch/Register.h"
 #include "mcsema/BC/DeadRegElimination.h"
 
-static llvm::cl::opt<bool> IgnoreUnsupportedInsts(
+static llvm::cl::opt<bool> DisableGlobalOpt(
     "disable-global-opt",
     llvm::cl::desc(
         "Disable whole-program dead register load/store optimizations."),
@@ -37,14 +37,6 @@ static llvm::cl::opt<bool> IgnoreUnsupportedInsts(
 namespace {
 
 using RegSet = std::bitset<128>;
-
-//class RegSet : public std::bitset<128> {
-// public:
-//  inline RegSet(void) {
-//    set();
-//  }
-//};
-
 using OffsetMap = std::unordered_map<llvm::Value *, unsigned>;
 
 struct FunctionState {
@@ -196,8 +188,15 @@ struct DeadStats {
 static void DeleteDeadRegs(llvm::BasicBlock *block, DeadStats &stats) {
   llvm::DataLayout layout(block->getModule());
   std::unordered_map<size_t, llvm::LoadInst *> load_forwarding;
-
+  auto func = block->getParent();
   auto live = gLiveRegsOnExit[block];
+  if (!live.count()) {
+    std::cerr
+        << "Probably impossible: all regs dead on exit of "
+        << block->getName().str() << " in " << func->getName().str()
+        << std::endl;
+    abort();
+  }
 
   std::unordered_set<llvm::Instruction *> to_remove;
   for (auto it = block->rbegin(); it != block->rend(); ++it) {
@@ -213,22 +212,17 @@ static void DeleteDeadRegs(llvm::BasicBlock *block, DeadStats &stats) {
       auto called_func = call->getCalledFunction();
       if (!called_func) {
         stats.num_indirect_calls++;
-        live.set();  // All regs are live.
-        load_forwarding.clear();
-
       } else if (called_func->isDeclaration()) {
-        if (!called_func->isIntrinsic()) {
-          live.set();  // External/unknown call; all is live.
-          load_forwarding.clear();
-          stats.num_extern_calls++;
-        } else {
+        if (called_func->isIntrinsic()) {
           stats.num_intrinsic_calls++;
+        } else {
+          stats.num_extern_calls++;
         }
       } else {
         stats.num_intern_calls++;
-        live = gLiveRegsOnEntry[inst];
-        load_forwarding.clear();
       }
+      live = gLiveRegsOnEntry[call];
+      load_forwarding.clear();
     }
 
     auto md = inst->getMetadata(llvm::LLVMContext::MD_alias_scope);
@@ -283,6 +277,14 @@ static void DeleteDeadRegs(llvm::BasicBlock *block, DeadStats &stats) {
 
       next_load = nullptr;
     }
+  }
+
+  if (!live.count()) {
+    std::cerr
+        << "Probably impossible: all regs dead on entry to "
+        << block->getName().str() << " in " << func->getName().str()
+        << std::endl;
+    abort();
   }
 
   for (auto dead_inst : to_remove) {
@@ -381,38 +383,24 @@ void AnnotateAliases(llvm::Function *func) {
 namespace {
 
 using SuccessorMap = std::unordered_multimap<
-    llvm::Instruction *, llvm::Value *>;
+    llvm::ReturnInst *, llvm::CallInst *>;
 
-//static void AddSuccessors(BlockMap &successors, llvm::Value *from,
-//                          llvm::BasicBlock *to_pred) {
-//  for (auto succ_block : llvm::successors(to_pred)) {
-//    successors.insert({from, succ_block});
-//  }
-//}
-
-static void BuildSucessorMap(
-    llvm::Module *module, SuccessorMap &successors) {
-
-  std::vector<llvm::Instruction *> func_exits;
-  std::vector<llvm::CallInst *> indirect_calls;
-  std::vector<llvm::Function *> uncalled_funcs;
+// Figure out the static successors of every `ret` instruction.
+static void BuildSucessorMap(llvm::Module *module, SuccessorMap &successors) {
+  std::vector<llvm::ReturnInst *> func_exits;
 
   for (auto &func : *module) {
-    // Go find the logical exit points of this function.
-    func_exits.clear();
-    llvm::BasicBlock *entry_block = nullptr;
+    if (func.isDeclaration()) {
+      continue;
+    }
 
-    if (!func.isDeclaration()) {
-      entry_block = &(func.getEntryBlock());
-      for (auto &block : func) {
-        for (auto &inst : block) {
-          if (llvm::isa<llvm::ReturnInst>(inst)) {
-            func_exits.push_back(&inst);
-          } else if (auto call = llvm::dyn_cast<llvm::CallInst>(&inst)) {
-            if (!call->getCalledFunction()) {
-              indirect_calls.push_back(call);
-            }
-          }
+    func_exits.clear();
+
+    auto entry_block = &(func.getEntryBlock());
+    for (auto &block : func) {
+      for (auto &inst : block) {
+        if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(&inst)) {
+          func_exits.push_back(ret);
         }
       }
     }
@@ -421,34 +409,8 @@ static void BuildSucessorMap(
     for (auto user : func.users()) {
       if (auto caller = llvm::dyn_cast<llvm::CallInst>(user)) {
         ++num_callers;
-        successors.insert({caller, entry_block});
         for (auto ret : func_exits) {
           successors.insert({ret, caller});
-        }
-      }
-    }
-
-    // Treat any uncalled yet defined function as a possible target of any
-    // indirect call.
-    if (!num_callers && !func.isDeclaration()) {
-      uncalled_funcs.push_back(&func);
-    }
-  }
-
-  // Go link every indirect call with every function that isn't called.
-  for (auto call : indirect_calls) {
-    func_exits.clear();
-    for (auto func : uncalled_funcs) {
-      if (func->isDeclaration()) {
-        continue;
-      }
-      auto entry_block = &(func->getEntryBlock());
-      successors.insert({call, entry_block});
-      for (auto &block : *func) {
-        for (auto &inst : block) {
-          if (llvm::isa<llvm::ReturnInst>(inst)) {
-            successors.insert({&inst, call});
-          }
         }
       }
     }
@@ -456,56 +418,22 @@ static void BuildSucessorMap(
 }
 
 static RegSet IncomingLiveRegs(SuccessorMap &successors, llvm::Value *val) {
-
   RegSet live;
   bool seen = false;
-
-  if (auto term = llvm::dyn_cast<llvm::TerminatorInst>(val)) {
-    auto block = term->getParent();
-    for (auto succ_block : llvm::successors(block)) {
-      live |= gLiveRegsOnEntry[succ_block];
-      seen = true;
-    }
-
-    if (seen) {
-      return live;
-    }
-  }
 
   // We've got a return; go look at what is live on exit of ever call
   // instruction that may target the function containing this `ret`.
   if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(val)) {
     auto succ_it = successors.find(ret);
     for (; succ_it != successors.end() && succ_it->first == ret; ++succ_it) {
-      if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(succ_it->second)) {
-        live |= gLiveRegsOnExit[call_inst];
-        seen = true;
-      }
-    }
-
-  // We've got a call, so we need to go accumulate the live regs across every
-  // possible target of the call.
-  } else if (auto call = llvm::dyn_cast<llvm::CallInst>(val)) {
-    auto called_func = call->getCalledFunction();
-
-    if (called_func && called_func->isDeclaration()) {
-      std::cerr
-          << "Function not used correctly!" << std::endl;
-      abort();
-    }
-
-    if (called_func) {
-      live = gLiveRegsOnEntry[&(called_func->getEntryBlock())];
+      live |= gLiveRegsOnExit[succ_it->second];
       seen = true;
-
-    } else {
-      auto succ_it = successors.find(call);
-      for (; succ_it != successors.end() && succ_it->first == call; ++succ_it) {
-        if (auto block = llvm::dyn_cast<llvm::BasicBlock>(succ_it->second)) {
-          live |= gLiveRegsOnEntry[block];
-          seen = true;
-        }
-      }
+    }
+  } else if (auto term = llvm::dyn_cast<llvm::TerminatorInst>(val)) {
+    auto block = term->getParent();
+    for (auto succ_block : llvm::successors(block)) {
+      live |= gLiveRegsOnEntry[succ_block];
+      seen = true;
     }
   }
 
@@ -520,7 +448,7 @@ static RegSet IncomingLiveRegs(SuccessorMap &successors, llvm::Value *val) {
 
 void OptimizeModule(llvm::Module *module) {
 
-  if (IgnoreUnsupportedInsts) {
+  if (DisableGlobalOpt) {
     return;
   }
 
@@ -532,6 +460,12 @@ void OptimizeModule(llvm::Module *module) {
   // Base cases for things like calls to externals; all the things are live.
   gLiveRegsOnEntry[nullptr].set();
   gLiveRegsOnExit[nullptr].set();
+
+  for (auto &func : *module) {
+    if (func.isDeclaration()) {
+      gLiveRegsOnEntry[&func].set();
+    }
+  }
 
   int iterations = 0;
   for (auto changed = true; changed; ++iterations) {
@@ -545,21 +479,17 @@ void OptimizeModule(llvm::Module *module) {
         auto it = block.rbegin();
         auto term = &*it++;
         auto live = IncomingLiveRegs(successors, term);
-
-        auto old_live_exit = &(gLiveRegsOnExit[&block]);
-        if (live != *old_live_exit) {
-          if (old_live_exit->count() > live.count()) {
+        auto old_live = gLiveRegsOnExit[&block];
+        if (live != old_live) {
+          if (old_live.count() > live.count()) {
             abort();
           }
           changed = true;
-          *old_live_exit = live;
+          gLiveRegsOnExit[&block] = live;
         }
-        old_live_exit = nullptr;
-
-        auto old_live_entry = gLiveRegsOnEntry[&block];
 
         for (; it != block.rend(); ++it) {
-          auto inst = &*it;
+          const auto inst = &*it;
 
           if (auto load = llvm::dyn_cast<llvm::LoadInst>(inst)) {
             auto md = load->getMetadata(llvm::LLVMContext::MD_alias_scope);
@@ -585,35 +515,35 @@ void OptimizeModule(llvm::Module *module) {
             }
 
           } else if (auto call = llvm::dyn_cast<llvm::CallInst>(inst)) {
-            auto called_func = call->getCalledFunction();
+            // Update the live regs on exit from this call.
+            old_live = gLiveRegsOnExit[call];
+            if (live != old_live) {
+              if (old_live.count() > live.count()) {
+                abort();
+              }
+              changed = true;
+              gLiveRegsOnExit[call] = live;
+            }
 
+            // Now get the live reg info from the called func.
+            auto called_func = call->getCalledFunction();
             if (called_func && called_func->isDeclaration()) {
               if (!called_func->isIntrinsic()) {
                 live.set();  // External/unknown call; all is live.
+              } else {
+                // Live remains as-is, the intrinsic doesn't touch the
+                // register state struct.
               }
-
             } else {
-              auto old_live_after_call = &(gLiveRegsOnExit[call]);
-              if (*old_live_after_call != live) {
-                if (old_live_after_call->count() > live.count()) {
-                  abort();
-                }
-                changed = true;
-                *old_live_after_call = live;
+              live = gLiveRegsOnEntry[called_func];
+            }
+            old_live = gLiveRegsOnEntry[call];
+            if (live != old_live) {
+              if (old_live.count() > live.count()) {
+                abort();
               }
-              old_live_after_call = nullptr;
-
-              live = IncomingLiveRegs(successors, call);
-
-              auto old_live_before_call = &(gLiveRegsOnEntry[call]);
-              if (*old_live_before_call != live) {
-                if (old_live_before_call->count() > live.count()) {
-                  abort();
-                }
-                changed = true;
-                *old_live_before_call = live;
-              }
-              old_live_before_call = nullptr;
+              changed = true;
+              gLiveRegsOnEntry[call] = live;
             }
 
           } else if (llvm::isa<llvm::TerminatorInst>(inst)) {
@@ -623,14 +553,18 @@ void OptimizeModule(llvm::Module *module) {
           }
         }
 
-        if (live != old_live_entry) {
-          if (old_live_entry.count() > live.count()) {
+        old_live = gLiveRegsOnEntry[&block];
+        if (live != old_live) {
+          if (old_live.count() > live.count()) {
             abort();
           }
           changed = true;
           gLiveRegsOnEntry[&block] = live;
         }
       }
+
+      // Propage liveness of the entry block to the function.
+      gLiveRegsOnEntry[&func] = gLiveRegsOnEntry[&(func.getEntryBlock())];
     }
   }
 
