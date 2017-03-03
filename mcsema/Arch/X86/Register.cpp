@@ -27,9 +27,8 @@ struct RegInfo {
   size_t parent_offset;
 };
 
-static const std::string gBadReg = "MISSING_REG";
-
 static std::unordered_map<MCSemaRegs, RegInfo> gRegInfo;
+static std::vector<RegInfo> gRealRegInfo;
 static std::vector<RegInfo> gOrderedRegInfo;
 static std::unordered_map<std::string, MCSemaRegs> gRegNum;
 
@@ -41,15 +40,21 @@ static MCSemaRegs gLastAddedReg = llvm::X86::NoRegister;
 static unsigned gNumRegs = 0;
 
 static void AddPadding(llvm::Type *type, int num_elements) {
-  gNumRegs++;
-  gRegFields.push_back(llvm::ArrayType::get(type, num_elements));
+  auto pad_type = llvm::ArrayType::get(type, num_elements);
+  gRegFields.push_back(pad_type);
   gLastAddedReg = llvm::X86::NoRegister;
+
+  RegInfo info = {
+      "PADDING", llvm::X86::NoRegister, false, pad_type, pad_type,
+      gNumRegs++, llvm::X86::NoRegister, 0};
+  gRealRegInfo.push_back(info);
 }
 
 static void AddReg(MCSemaRegs reg, const char *name, llvm::Type *type) {
   RegInfo info = {name, reg, false, type, type, gNumRegs++, reg, 0};
   gRegInfo[reg] = info;
   gRegNum[name] = reg;
+  gRealRegInfo.push_back(info);
   gRegFields.push_back(type);
   gOrderedRegInfo.push_back(info);
   gLastAddedReg = reg;
@@ -228,15 +233,17 @@ void X86InitRegisterState(llvm::LLVMContext *context) {
   AddReg(llvm::X86::XMM14, "XMM14", int128_type);
   AddReg(llvm::X86::XMM15, "XMM15", int128_type);
 
-  gRegStateStruct = llvm::StructType::create(*context, gRegFields, "RegState", false);
+  gRegStateStruct = llvm::StructType::create(
+      *context, gRegFields, "RegState", false);
 }
 
 const std::string &X86RegisterName(MCSemaRegs reg) {
   const auto it = gRegInfo.find(reg);
   if (it == gRegInfo.end()) {
     std::cerr
-        << "ERROR: Can't find register name for number " << reg << std::endl;
-    return gBadReg;
+        << "ERROR: Can't find register name for number "
+        << std::dec << reg << std::endl;
+    abort();
   } else {
     return it->second.name;
   }
@@ -250,8 +257,9 @@ unsigned X86RegisterOffset(MCSemaRegs reg) {
   const auto it = gRegInfo.find(reg);
   if (it == gRegInfo.end()) {
     std::cerr
-        << "ERROR: Can't find register offset for number " << reg << std::endl;
-    return 0;
+        << "ERROR: Can't find register offset for number "
+        << std::dec << reg << std::endl;
+    abort();
   } else {
     return static_cast<unsigned>(it->second.state_offset);
   }
@@ -261,8 +269,9 @@ MCSemaRegs X86RegisterParent(MCSemaRegs reg) {
   const auto it = gRegInfo.find(reg);
   if (it == gRegInfo.end()) {
     std::cerr
-        << "ERROR: Can't find register parent for number " << reg << std::endl;
-    return reg;
+        << "ERROR: Can't find register parent for number "
+        << std::dec << reg << std::endl;
+    abort();
   } else {
     return it->second.parent_reg;
   }
@@ -314,8 +323,9 @@ unsigned X86RegisterSize(MCSemaRegs reg) {
   const auto it = gRegInfo.find(reg);
   if (it == gRegInfo.end()) {
     std::cerr
-        << "ERROR: Can't find register for number " << reg << std::endl;
-    return 0;
+        << "ERROR: Can't find register for number "
+        << std::dec << reg << std::endl;
+    abort();
   } else {
     return it->second.read_type->getScalarSizeInBits();
   }
@@ -323,4 +333,15 @@ unsigned X86RegisterSize(MCSemaRegs reg) {
 
 llvm::StructType *X86RegStateStructType(void) {
   return gRegStateStruct;
+}
+
+MCSemaRegs X86RegisterForOffset(unsigned offset) {
+  if (offset < gRealRegInfo.size()) {
+    return gRealRegInfo[offset].reg;
+  } else {
+    std::cerr
+        << "Can't find register for offset "
+        << std::dec << offset << std::endl;
+    abort();
+  }
 }

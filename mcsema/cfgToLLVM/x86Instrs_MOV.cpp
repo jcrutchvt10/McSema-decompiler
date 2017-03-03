@@ -306,10 +306,10 @@ static llvm::Value* getLoadableValue(llvm::Value *ptr,
     unsigned bw = it->getIntegerBitWidth();
 
     if (bw == width) {
-      return noAliasMCSemaScope(new llvm::LoadInst(ptr, "", block));
+      return noAliasMCSemaScope(new llvm::LoadInst(ptr, "", false, block));
     } else if (bw < width) {
       llvm::Value *to_ext = noAliasMCSemaScope(
-          new llvm::LoadInst(ptr, "", block));
+          new llvm::LoadInst(ptr, "", false, block));
       return new llvm::ZExtInst(
           to_ext, llvm::Type::getIntNTy(block->getContext(), width), "", block);
     } else {
@@ -340,7 +340,8 @@ static llvm::Value* getLoadableValue(llvm::Value *ptr,
                                                ptr_ty->getAddressSpace());
       auto int_ptr = llvm::CastInst::CreatePointerCast(ptr, new_ptr_ty, "",
                                                        block);
-      auto as_int = noAliasMCSemaScope(new llvm::LoadInst(int_ptr, "", block));
+      auto as_int = noAliasMCSemaScope(new llvm::LoadInst(
+          int_ptr, "", false, block));
       // bitcast to integer
       TASSERT(as_int != NULL, "Can't load pointer");
 

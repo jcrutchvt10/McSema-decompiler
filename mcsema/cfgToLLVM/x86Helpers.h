@@ -69,7 +69,7 @@ static llvm::Value *getValueForExternal(llvm::Module *M, NativeInstPtr ip,
       // sometimes windows will import this directly as the variable instead of
       // as a reference to a variable. But the rest of the code wants a pointer to var
       llvm::Value *toPtr = new llvm::AllocaInst(gvar->getType(), "", block);
-      llvm::Value *writeIt = new llvm::StoreInst(gvar, toPtr, block);
+      llvm::Value *writeIt = new llvm::StoreInst(gvar, toPtr, false, block);
       addrInt = new llvm::PtrToIntInst(
           toPtr, llvm::Type::getIntNTy(block->getContext(), width), "", block);
     } else {
@@ -178,12 +178,6 @@ llvm::ConstantInt *CONST_V(llvm::BasicBlock *b, uint64_t val);
 llvm::Value *MEM_AS_DATA_REF(llvm::BasicBlock *B, NativeModulePtr natM,
                              const llvm::MCInst &inst, NativeInstPtr ip,
                              uint32_t which);
-
-// emit an llvm memcpy intrinsic
-llvm::Instruction* callMemcpy(llvm::BasicBlock *B, llvm::Value *dest,
-                              llvm::Value *src, uint32_t size, uint32_t align =
-                                  4,
-                              bool isVolatile = false);
 
 // return a computed pointer to that data reference for 32/64 bit architecture
 template<int width>

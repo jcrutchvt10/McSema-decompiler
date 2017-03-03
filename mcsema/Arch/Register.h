@@ -90,6 +90,7 @@ extern MCSemaRegs (*ArchRegisterParent)(MCSemaRegs);
 extern void (*ArchAllocRegisterVars)(llvm::BasicBlock *);
 extern unsigned (*ArchRegisterSize)(MCSemaRegs);
 extern llvm::StructType *(*ArchRegStateStructType)(void);
+extern MCSemaRegs (*ArchRegisterForOffset)(unsigned);
 
 #define getRegisterName ArchRegisterName
 #define getRegisterFromName ArchRegisterNumber

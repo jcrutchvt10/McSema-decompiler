@@ -147,6 +147,8 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    OptimizeModule(M);
+
     RenameLiftedFunctions(mod, M, entry_point_pcs);
 
     // will abort if verification fails

@@ -63,6 +63,7 @@ MCSemaRegs X86RegisterParent(MCSemaRegs reg);
 void X86AllocRegisterVars(llvm::BasicBlock *);
 unsigned X86RegisterSize(MCSemaRegs reg);
 llvm::StructType *X86RegStateStructType(void);
+MCSemaRegs X86RegisterForOffset(unsigned);
 
 // Define the generic arch function pointers.
 const std::string &(*ArchRegisterName)(MCSemaRegs) = nullptr;
@@ -72,6 +73,7 @@ MCSemaRegs (*ArchRegisterParent)(MCSemaRegs) = nullptr;
 void (*ArchAllocRegisterVars)(llvm::BasicBlock *) = nullptr;
 unsigned (*ArchRegisterSize)(MCSemaRegs) = nullptr;
 llvm::StructType *(*ArchRegStateStructType)(void) = nullptr;
+MCSemaRegs (*ArchRegisterForOffset)(unsigned) = nullptr;
 
 bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::string &arch) {
 
@@ -139,6 +141,7 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
     ArchRegisterSize = X86RegisterSize;
     ArchAllocRegisterVars = X86AllocRegisterVars;
     ArchRegStateStructType = X86RegStateStructType;
+    ArchRegisterForOffset = X86RegisterForOffset;
   } else {
     return false;
   }

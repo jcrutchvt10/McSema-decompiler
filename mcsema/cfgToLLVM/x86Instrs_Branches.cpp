@@ -349,7 +349,6 @@ static llvm::CallInst *emitInternalCall(llvm::BasicBlock *&b, llvm::Module *M,
   }
   auto c = llvm::CallInst::Create(targetF, subArgs, "", b);
   ArchSetCallingConv(M, c);
-
   // return ptr to this callinst
   return c;
 }
@@ -389,7 +388,8 @@ static InstTransResult doCallPC(NativeInstPtr ip, llvm::BasicBlock *&b,
 namespace x86 {
 static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
                                       bool is_jump) {
-  auto M = b->getParent()->getParent();
+  auto F = b->getParent();
+  auto M = F->getParent();
   auto &C = M->getContext();
 
   //write it into the location pointer to by ESP-4
@@ -469,7 +469,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
     }
   }
 
-  if ( !is_jump) {
+  if (!is_jump) {
     writeDetachReturnAddr<32>(b);
   }
   auto callR = llvm::CallInst::Create(exit_point, arguments, "", b);
@@ -483,24 +483,26 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
               << std::endl;
     callR->setDoesNotReturn();
     callR->setTailCall();
-    (void) new llvm::UnreachableInst(b->getContext(), b);
+    (void) new llvm::UnreachableInst(C, b);
     return EndBlock;
   }
 
   // we returned from an extern: assume it cleared the direction flag
   // which is standard for MS calling conventions
-  //
-  F_CLEAR(b, llvm::X86::DF);
+  if (llvm::Triple::Win32 == OSType()) {
+    F_CLEAR(b, llvm::X86::DF);
+  }
 
   //if our convention says to keep the call result alive then do it
   //really, we could always keep the call result alive...
-  if (rType == llvm::Type::getInt32Ty(M->getContext())) {
+  if (rType == llvm::Type::getInt32Ty(C)) {
     x86::R_WRITE<32>(b, llvm::X86::EAX, callR);
   }
 
   return ContinueBlock;
 }
-}
+
+}  // namespace x86
 
 namespace x86_64 {
 
@@ -550,9 +552,9 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             state_ptr, arg1FieldGEPV, "XMM0", b);
         auto GEP_double = llvm::CastInst::CreatePointerCast(
             GEP_128,
-            llvm::PointerType::get(llvm::Type::getDoubleTy(M->getContext()), 0),
+            llvm::PointerType::get(llvm::Type::getDoubleTy(C), 0),
             "conv0", b);
-        arg1 = new llvm::LoadInst(GEP_double, "", b);
+        arg1 = new llvm::LoadInst(GEP_double, "", false, b);
 
       } else {
         arg1 = x86_64::R_READ<64>(b, llvm::X86::RCX);
@@ -577,7 +579,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             GEP_128,
             llvm::PointerType::get(llvm::Type::getDoubleTy(M->getContext()), 0),
             "conv1", b);
-        arg2 = new llvm::LoadInst(GEP_double, "", b);
+        arg2 = new llvm::LoadInst(GEP_double, "", false, b);
       } else {
         arg2 = x86_64::R_READ<64>(b, llvm::X86::RDX);
       }
@@ -600,7 +602,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             GEP_128,
             llvm::PointerType::get(llvm::Type::getDoubleTy(M->getContext()), 0),
             "conv2", b);
-        arg3 = new llvm::LoadInst(GEP_double, "", b);
+        arg3 = new llvm::LoadInst(GEP_double, "", false, b);
       } else {
         arg3 = x86_64::R_READ<64>(b, llvm::X86::R8);
       }
@@ -623,7 +625,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             GEP_128,
             llvm::PointerType::get(llvm::Type::getDoubleTy(M->getContext()), 0),
             "conv3", b);
-        arg4 = new llvm::LoadInst(GEP_double, "", b);
+        arg4 = new llvm::LoadInst(GEP_double, "", false, b);
       } else {
         arg4 = x86_64::R_READ<64>(b, llvm::X86::R9);
       }
@@ -717,7 +719,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
     }
   }
 
-  if ( !is_jump) {
+  if (!is_jump) {
     writeDetachReturnAddr<64>(b);
   }
 
@@ -737,7 +739,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
 
   //if our convention says to keep the call result alive then do it
   //really, we could always keep the call result alive...
-  if (rType == llvm::Type::getInt64Ty(M->getContext())) {
+  if (rType == llvm::Type::getInt64Ty(C)) {
     x86_64::R_WRITE<64>(b, llvm::X86::RAX, callR);
   }
 

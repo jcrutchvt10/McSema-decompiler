@@ -105,8 +105,7 @@ llvm::Value *INTERNAL_M_READ(unsigned width, unsigned addrspace,
     readLoc = new llvm::IntToPtrInst(readLoc, PtrTy, "", b);
   }
 
-  auto is_volatile = addrspace != 0;
-  return new llvm::LoadInst(readLoc, "", is_volatile, b);
+  return new llvm::LoadInst(readLoc, "", false, b);
 }
 
 void INTERNAL_M_WRITE(int width, unsigned addrspace, llvm::BasicBlock *b,
@@ -128,8 +127,7 @@ void INTERNAL_M_WRITE(int width, unsigned addrspace, llvm::BasicBlock *b,
     writeLoc = new llvm::IntToPtrInst(writeLoc, PtrTy, "", b);
   }
 
-  auto is_volatile = addrspace != 0;
-  (void) new llvm::StoreInst(data, writeLoc, is_volatile, b);
+  (void) new llvm::StoreInst(data, writeLoc, false, b);
 }
 
 void M_WRITE_T(NativeInstPtr ip, llvm::BasicBlock *b, llvm::Value *addr,
@@ -150,7 +148,7 @@ void M_WRITE_T(NativeInstPtr ip, llvm::BasicBlock *b, llvm::Value *addr,
     writeLoc = llvm::CastInst::CreatePointerCast(addr, ptrtype, "", b);
   }
 
-  (void) new llvm::StoreInst(data, writeLoc, b);
+  (void) new llvm::StoreInst(data, writeLoc, false, b);
 }
 
 llvm::Value *ADDR_TO_POINTER(
@@ -229,7 +227,7 @@ void GENERIC_MC_WRITEREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
     }
   }
 
-  (void) new llvm::StoreInst(val, reg_ptr, "", false, B);
+  (void) new llvm::StoreInst(val, reg_ptr, false, B);
 }
 
 llvm::Value *GENERIC_MC_READREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
@@ -247,7 +245,7 @@ llvm::Value *GENERIC_MC_READREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
   llvm::DataLayout DL(M);
 
   auto val_ptr = GetReadReg(F, mc_reg);
-  llvm::Value *val = new llvm::LoadInst(val_ptr, "", B);
+  llvm::Value *val = new llvm::LoadInst(val_ptr, "", false, B);
   auto val_ty = val->getType();
   auto val_size = DL.getTypeAllocSizeInBits(val_ty);
 
@@ -510,7 +508,7 @@ static bool InsertFunctionIntoModule(NativeModulePtr mod,
   }
 
   // Do some simple optimizations of the function.
-  OptimizeFunction(F);
+  AnnotateAliases(F);
 
   // For ease of debugging generated code, don't allow lifted functions to
   // be inlined. This will make lifted and native call graphs one-to-one.

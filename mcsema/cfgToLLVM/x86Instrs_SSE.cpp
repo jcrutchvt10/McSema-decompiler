@@ -761,7 +761,7 @@ static InstTransResult doNewShift(llvm::BasicBlock *&b,
 
   llvm::Value *vecShiftPtr = new llvm::AllocaInst(vt, nullptr, "", b);
   llvm::Value *shiftVector = noAliasMCSemaScope(
-      new llvm::LoadInst(vecShiftPtr, "", b));
+      new llvm::LoadInst(vecShiftPtr, "", false, b));
 
   int elem_count = 128 / elementwidth;
 
@@ -1004,7 +1004,7 @@ static llvm::Value* doBlendVV(llvm::BasicBlock *&b, llvm::Value *input1,
 
   llvm::Value *resultAlloc = new llvm::AllocaInst(vt, nullptr, "", b);
   llvm::Value *vecResult = noAliasMCSemaScope(
-      new llvm::LoadInst(resultAlloc, "", b));
+      new llvm::LoadInst(resultAlloc, "", false, b));
 
   for (int i = 0; i < elem_count; i++) {
     // get input value
@@ -1076,7 +1076,7 @@ static llvm::Value* doShuffleRR(llvm::BasicBlock *&b, llvm::Value *input,
 
   llvm::Value *resultAlloc = new llvm::AllocaInst(vt, nullptr, "", b);
   llvm::Value *vecResult = noAliasMCSemaScope(
-      new llvm::LoadInst(resultAlloc, "", b));
+      new llvm::LoadInst(resultAlloc, "", false, b));
 
   for (int i = 0; i < elem_count; i++) {
     // get input value
@@ -1788,7 +1788,7 @@ static InstTransResult do_SSE_EXTEND_OP(const llvm::MCOperand &dst,
 
   llvm::Value *resultAlloc = new llvm::AllocaInst(dst_vt, nullptr, "", b);
   llvm::Value *vecResult = noAliasMCSemaScope(
-      new llvm::LoadInst(resultAlloc, "", b));
+      new llvm::LoadInst(resultAlloc, "", false, b));
 
   // we take lower dst_elem_count values
   for (int i = 0; i < dst_elem_count; i++) {

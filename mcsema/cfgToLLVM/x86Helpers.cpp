@@ -191,29 +191,3 @@ llvm::Value *MEM_AS_DATA_REF(llvm::BasicBlock *B, NativeModulePtr natM,
   }
   return getAddrFromExpr(B, natM, inst, ip, which);
 }
-
-llvm::Instruction *callMemcpy(llvm::BasicBlock *B, llvm::Value *dest,
-                              llvm::Value *src, uint32_t size, uint32_t align,
-                              bool isVolatile) {
-  auto copySize = CONST_V<32>(B, size);
-  // ALIGN: 4 byte alignment, i think
-  auto alignSize = CONST_V<32>(B, align);
-  // VOLATILE: false
-  auto vIsVolatile = CONST_V<1>(B, isVolatile);
-
-  llvm::Type *Tys[] = {dest->getType(), src->getType(), copySize->getType()};
-
-  auto M = B->getParent()->getParent();
-  auto doMemCpy = llvm::Intrinsic::getDeclaration(
-      M, llvm::Intrinsic::memcpy, Tys);
-
-  llvm::Value *callArgs[] = {dest,  // DST
-      src,  // SRC
-      copySize,  // SIZE
-      alignSize,  // ALIGN
-      vIsVolatile  // VOLATILE
-      };
-
-  // actually call llvm.memcpy
-  return llvm::CallInst::Create(doMemCpy, callArgs, "", B);
-}

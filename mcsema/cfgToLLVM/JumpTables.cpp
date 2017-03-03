@@ -176,13 +176,15 @@ void doJumpTableViaData(TranslationContext &ctx, llvm::BasicBlock *&block,
   auto func_addr = llvm::CastInst::CreatePointerCast(addr, Fptr2Ty, "", block);
 
   // read in entry from table
-  auto new_func = noAliasMCSemaScope(new llvm::LoadInst(func_addr, "", block));
+  auto new_func = noAliasMCSemaScope(new llvm::LoadInst(
+      func_addr, "", false, block));
 
   doJumpTableViaData(block, new_func, bitness);
 }
 
 template<int bitness>
-static void doJumpTableViaSwitch(TranslationContext &ctx, llvm::BasicBlock *&block) {
+static void doJumpTableViaSwitch(TranslationContext &ctx,
+                                 llvm::BasicBlock *&block) {
   auto ip = ctx.natI;
   auto &inst = ip->get_inst();
   auto natM = ctx.natM;

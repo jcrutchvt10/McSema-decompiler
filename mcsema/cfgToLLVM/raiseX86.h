@@ -53,13 +53,8 @@ enum StoreSpillType {
 // state modeling functions
 ///////////////////////////////////////////////////////////////////////////////
 
-inline static llvm::Instruction *noAliasMCSemaScope(llvm::Instruction *inst) {
-  return inst;
-}
-
-inline static llvm::Instruction *aliasMCSemaScope(llvm::Instruction *inst) {
-  return inst;
-}
+#define noAliasMCSemaScope(...) reinterpret_cast<llvm::Value *>(__VA_ARGS__)
+#define aliasMCSemaScope(...) reinterpret_cast<llvm::Value *>(__VA_ARGS__)
 
 void GENERIC_WRITEREG(llvm::BasicBlock *b, MCSemaRegs reg, llvm::Value *v);
 llvm::Value *GENERIC_READREG(llvm::BasicBlock *b, MCSemaRegs reg);

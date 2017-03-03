@@ -11,6 +11,7 @@ class Module;
 void InitDeadRegisterEliminator(llvm::Module *module, size_t num_funcs,
                                 size_t num_blocks);
 
-void OptimizeFunction(llvm::Function *func);
+void AnnotateAliases(llvm::Function *func);
+void OptimizeModule(llvm::Module *module);
 
 #endif  // MCSEMA_BC_DEADREGELIMINATION_H_
