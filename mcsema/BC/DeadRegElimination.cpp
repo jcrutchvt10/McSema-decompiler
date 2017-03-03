@@ -21,10 +21,18 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
+#include <llvm/Support/CommandLine.h>
+
 #include <llvm/Transforms/Scalar.h>
 
 #include "mcsema/Arch/Register.h"
 #include "mcsema/BC/DeadRegElimination.h"
+
+static llvm::cl::opt<bool> IgnoreUnsupportedInsts(
+    "disable-global-opt",
+    llvm::cl::desc(
+        "Disable whole-program dead register load/store optimizations."),
+    llvm::cl::init(false));
 
 namespace {
 
@@ -511,6 +519,10 @@ static RegSet IncomingLiveRegs(SuccessorMap &successors, llvm::Value *val) {
 }  // namespace
 
 void OptimizeModule(llvm::Module *module) {
+
+  if (IgnoreUnsupportedInsts) {
+    return;
+  }
 
   SuccessorMap successors;
   BuildSucessorMap(module, successors);
