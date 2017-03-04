@@ -21,23 +21,17 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include <llvm/Support/CommandLine.h>
-
 #include <llvm/Transforms/Scalar.h>
 
 #include "mcsema/Arch/Register.h"
 #include "mcsema/BC/DeadRegElimination.h"
 
-static llvm::cl::opt<bool> DisableGlobalOpt(
-    "disable-global-opt",
-    llvm::cl::desc(
-        "Disable whole-program dead register load/store optimizations."),
-    llvm::cl::init(false));
-
 namespace {
 
 using RegSet = std::bitset<128>;
 using OffsetMap = std::unordered_map<llvm::Value *, unsigned>;
+
+static const unsigned kAllocaOffset = 0xFFFFU;
 
 struct FunctionState {
   std::unordered_map<llvm::Instruction *, unsigned> offsets;
@@ -91,8 +85,10 @@ static OffsetMap GetOffsets(llvm::Function *func) {
         if (offset.count(&inst)) {
           continue;
         }
+        if (llvm::isa<llvm::AllocaInst>(inst)) {
+          offset[&inst] = kAllocaOffset;
 
-        if (auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(&inst)) {
+        } else if (auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(&inst)) {
           auto base = gep->getPointerOperand();
           if (!offset.count(base)) {
             continue;
@@ -155,6 +151,9 @@ static void AssignAliasInfo(llvm::Function *func, OffsetMap &offsets) {
           llvm::isa<llvm::StoreInst>(&inst)) {
         if (offsets.count(&inst)) {
           auto byte_offset = offsets[&inst];
+          if (kAllocaOffset <= byte_offset) {
+            continue;
+          }
           auto reg_offset = gByteOffsetToRegOffset[byte_offset];
           meta.Scope = gRegScope[reg_offset];
           meta.NoAlias = gRegNoAliasScope[reg_offset];
@@ -447,11 +446,6 @@ static RegSet IncomingLiveRegs(SuccessorMap &successors, llvm::Value *val) {
 }  // namespace
 
 void OptimizeModule(llvm::Module *module) {
-
-  if (DisableGlobalOpt) {
-    return;
-  }
-
   SuccessorMap successors;
   BuildSucessorMap(module, successors);
 

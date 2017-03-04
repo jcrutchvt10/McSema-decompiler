@@ -555,7 +555,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             GEP_128,
             llvm::PointerType::get(llvm::Type::getDoubleTy(C), 0),
             "conv0", b);
-        arg1 = new llvm::LoadInst(GEP_double, "", false, b);
+        arg1 = new llvm::LoadInst(GEP_double, "", true, b);
 
       } else {
         arg1 = x86_64::R_READ<64>(b, llvm::X86::RCX);
@@ -580,7 +580,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             GEP_128,
             llvm::PointerType::get(llvm::Type::getDoubleTy(M->getContext()), 0),
             "conv1", b);
-        arg2 = new llvm::LoadInst(GEP_double, "", false, b);
+        arg2 = new llvm::LoadInst(GEP_double, "", true, b);
       } else {
         arg2 = x86_64::R_READ<64>(b, llvm::X86::RDX);
       }
@@ -603,7 +603,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             GEP_128,
             llvm::PointerType::get(llvm::Type::getDoubleTy(M->getContext()), 0),
             "conv2", b);
-        arg3 = new llvm::LoadInst(GEP_double, "", false, b);
+        arg3 = new llvm::LoadInst(GEP_double, "", true, b);
       } else {
         arg3 = x86_64::R_READ<64>(b, llvm::X86::R8);
       }
@@ -626,7 +626,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
             GEP_128,
             llvm::PointerType::get(llvm::Type::getDoubleTy(M->getContext()), 0),
             "conv3", b);
-        arg4 = new llvm::LoadInst(GEP_double, "", false, b);
+        arg4 = new llvm::LoadInst(GEP_double, "", true, b);
       } else {
         arg4 = x86_64::R_READ<64>(b, llvm::X86::R9);
       }

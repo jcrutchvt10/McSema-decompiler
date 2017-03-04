@@ -162,7 +162,7 @@ static llvm::Value *FPUM_READ(NativeInstPtr ip, int memwidth,
 
   readLoc = ADDR_TO_POINTER_V(b, addr, ptrTy);
 
-  auto read = noAliasMCSemaScope(new llvm::LoadInst(readLoc, "", false, b));
+  auto read = noAliasMCSemaScope(new llvm::LoadInst(readLoc, "", true, b));
 
   // Convert precision - this is here for cases like FPU compares where the
   // compare would fail unless both precisions were adjusted.
@@ -225,7 +225,7 @@ static llvm::BasicBlock *createNewFpuBlock(llvm::BasicBlock *&b,
         CONST_V<32>(b, index) };\
     auto gepreg = llvm::GetElementPtrInst::CreateInBounds(st, stGEPV, "", b);\
     auto storeIt = noAliasMCSemaScope(new llvm::StoreInst( \
-        member, gepreg, false, b));\
+        member, gepreg, true, b));\
     NASSERT(storeIt != NULL);\
     } while(0);
 
@@ -364,7 +364,7 @@ static InstTransResult doFstcw(NativeInstPtr ip, llvm::BasicBlock *&b,
   cw = SHL_NOTXOR_FLAG<16>(b, cw, llvm::X86::FPU_RC, 10);
   cw = SHL_NOTXOR_FLAG<16>(b, cw, llvm::X86::FPU_X, 12);
 
-  (void) noAliasMCSemaScope(new llvm::StoreInst(cw, memPtr, false, b));
+  (void) noAliasMCSemaScope(new llvm::StoreInst(cw, memPtr, true, b));
 
   return ContinueBlock;
 }

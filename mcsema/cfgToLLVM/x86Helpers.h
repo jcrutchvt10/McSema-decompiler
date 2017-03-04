@@ -69,7 +69,7 @@ static llvm::Value *getValueForExternal(llvm::Module *M, NativeInstPtr ip,
       // sometimes windows will import this directly as the variable instead of
       // as a reference to a variable. But the rest of the code wants a pointer to var
       llvm::Value *toPtr = new llvm::AllocaInst(gvar->getType(), "", block);
-      llvm::Value *writeIt = new llvm::StoreInst(gvar, toPtr, false, block);
+      llvm::Value *writeIt = new llvm::StoreInst(gvar, toPtr, true, block);
       addrInt = new llvm::PtrToIntInst(
           toPtr, llvm::Type::getIntNTy(block->getContext(), width), "", block);
     } else {
@@ -79,7 +79,7 @@ static llvm::Value *getValueForExternal(llvm::Module *M, NativeInstPtr ip,
     }
 
   } else {
-    throw TErr(__LINE__, __FILE__, "No external refernce to get value for!");
+    throw TErr(__LINE__, __FILE__, "No external reference to get value for!");
   }
 
   return addrInt;

@@ -105,7 +105,7 @@ llvm::Value *INTERNAL_M_READ(unsigned width, unsigned addrspace,
     readLoc = new llvm::IntToPtrInst(readLoc, PtrTy, "", b);
   }
 
-  return new llvm::LoadInst(readLoc, "", false, b);
+  return new llvm::LoadInst(readLoc, "", true /* volatile */, b);
 }
 
 void INTERNAL_M_WRITE(int width, unsigned addrspace, llvm::BasicBlock *b,
@@ -127,7 +127,7 @@ void INTERNAL_M_WRITE(int width, unsigned addrspace, llvm::BasicBlock *b,
     writeLoc = new llvm::IntToPtrInst(writeLoc, PtrTy, "", b);
   }
 
-  (void) new llvm::StoreInst(data, writeLoc, false, b);
+  (void) new llvm::StoreInst(data, writeLoc, true /* volatile */, b);
 }
 
 void M_WRITE_T(NativeInstPtr ip, llvm::BasicBlock *b, llvm::Value *addr,
@@ -148,7 +148,7 @@ void M_WRITE_T(NativeInstPtr ip, llvm::BasicBlock *b, llvm::Value *addr,
     writeLoc = llvm::CastInst::CreatePointerCast(addr, ptrtype, "", b);
   }
 
-  (void) new llvm::StoreInst(data, writeLoc, false, b);
+  (void) new llvm::StoreInst(data, writeLoc, true /* volatile */, b);
 }
 
 llvm::Value *ADDR_TO_POINTER(
@@ -227,7 +227,7 @@ void GENERIC_MC_WRITEREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
     }
   }
 
-  (void) new llvm::StoreInst(val, reg_ptr, false, B);
+  (void) new llvm::StoreInst(val, reg_ptr, true, B);
 }
 
 llvm::Value *GENERIC_MC_READREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
@@ -245,7 +245,7 @@ llvm::Value *GENERIC_MC_READREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
   llvm::DataLayout DL(M);
 
   auto val_ptr = GetReadReg(F, mc_reg);
-  llvm::Value *val = new llvm::LoadInst(val_ptr, "", false, B);
+  llvm::Value *val = new llvm::LoadInst(val_ptr, "", true /* volatile */, B);
   auto val_ty = val->getType();
   auto val_size = DL.getTypeAllocSizeInBits(val_ty);
 

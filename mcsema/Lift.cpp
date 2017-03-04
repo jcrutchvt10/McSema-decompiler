@@ -71,8 +71,14 @@ static llvm::cl::list<std::string> EntryPoints(
     "entrypoint", llvm::cl::desc("Describe externally visible entry points"),
     llvm::cl::value_desc("<symbol | ep address>"));
 
+static llvm::cl::opt<bool> DisableGlobalOpt(
+    "disable-global-opt",
+    llvm::cl::desc(
+        "Disable whole-program dead register load/store optimizations."),
+    llvm::cl::init(false));
+
 static void PrintVersion(void) {
-  std::cout << "0.6" << std::endl;
+  std::cout << "2.0" << std::endl;
 }
 
 static VA FindSymbolInModule(NativeModulePtr mod, const std::string &sym_name) {
@@ -147,7 +153,9 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    OptimizeModule(M);
+    if (!DisableGlobalOpt) {
+      OptimizeModule(M);
+    }
 
     RenameLiftedFunctions(mod, M, entry_point_pcs);
 
