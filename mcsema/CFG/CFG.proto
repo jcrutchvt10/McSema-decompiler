@@ -1,3 +1,15 @@
+// CFG.proto
+//
+// Definition of protobuf containing control flow graph information for
+// the mcsema lifter (mcsema-lift).
+//
+// Currently constructed/populated by mcsema-disass, it may also be populated
+// by custom tools.
+//
+// The top-level object is a Module, containing functions, data, and references
+// to external functions and data, a la an llvm Module.
+//
+
 
 message OffsetTable {
     required int64 start_addr = 1;
@@ -11,11 +23,7 @@ message JumpTbl {
     optional    int64       offset_from_data = 3;
 }
 
-message JumpIndexTbl {
-    required    bytes       table_entries = 1;
-    required    int32       zero_offset = 2;
-}
-
+// A single instruction in the binary's architecture
 message Instruction {
 
     enum RefType {
@@ -23,10 +31,15 @@ message Instruction {
       DataRef = 1;
     }
 
+    // bytes comprising instruction opcode and operands
     required    bytes             inst_bytes = 1;
+    // address of this instruction in the binary
     required    int64             inst_addr = 2;
+    // control flow target of a conditional instruction resulting in True
     optional    int64             true_target = 3;
+    // control flow target of a conditional instruction resulting in False
     optional    int64             false_target = 4;
+    // length of instruction in bytes
     required    int32             inst_len = 5;
 
     optional    int64             imm_reference = 6;
@@ -37,20 +50,17 @@ message Instruction {
     optional    int64             mem_reloc_offset = 9;
     optional    RefType           mem_ref_type = 18;
 
-    //optional    int64             call_target = 8;
-
     optional    string            ext_call_name = 7;
-    //optional    int32             reloc_offset = 9;
     optional    JumpTbl           jump_table = 10;
-    optional    JumpIndexTbl      jump_index_table = 11;
     optional    string            ext_data_name = 12;
-    optional    int32             system_call_number = 13;
     optional    bool              local_noreturn = 14;
     optional    int64             offset_table_addr = 19;
 }
 
 message Block {
+    // list of instructions in this basic block
     repeated    Instruction insts = 1;
+    // address of beginning of this basic block 
     required    int64       base_address = 2;
     //the block_follows list is used to rebuild the basic block CFG, so it 
     //should contain the list of base_addresses for blocks following this 
@@ -59,8 +69,11 @@ message Block {
 }
 
 message Function {
+    // the basic blocks in this function
     repeated    Block   blocks = 1;
+    // address of beginning of this function
     required    int64   entry_address = 2;
+    // function symbol name, as available
     optional    string  symbol_name = 3;
 }
 
@@ -78,7 +91,6 @@ message ExternalFunction {
     required    bool              no_return = 4;
     required    int32             argument_count = 5;
     required    bool              is_weak = 6;
-    optional    string            signature = 7;
 }
 
 message ExternalData {
@@ -89,13 +101,16 @@ message ExternalData {
 
 
 message DataSymbol {
+    // address of data symbol
     required int64 base_address = 1;
     required string symbol_name = 2;
     required int32 symbol_size = 3;
 }
 
 message Data {
+    // start of this data section
     required    int64           base_address = 1;
+    // bytes in this data section
     required    bytes           data = 2;
     repeated    DataSymbol      symbols = 3;    
     required    bool            read_only = 4;
@@ -103,6 +118,7 @@ message Data {
 
 message EntrySymbolExtra {
     required    int32                               entry_argc = 1;
+    // calling convention
     required    ExternalFunction.CallingConvention  entry_cconv = 2;
     required    bool                                does_return = 3;
 }
