@@ -125,19 +125,21 @@ list(APPEND PROJECT_DEFINITIONS "GOOGLE_PROTOBUF_NO_RTTI")
 
 # this function can't be told where to store the output files! we have to add the whole binary directory
 # to the include directories (or change it and lose compatibility with the system libraries)
-protobuf_generate_cpp(PROJECT_PROTOBUFSOURCEFILES PROJECT_PROTOBUFHEADERFILES "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+protobuf_generate_cpp(PROJECT_PROTOBUFSOURCEFILES PROJECT_PROTOBUFHEADERFILES "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/CFG/CFG.proto")
 list(APPEND PROJECT_INCLUDEDIRECTORIES ${CMAKE_CURRENT_BINARY_DIR})
 
-protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${CMAKE_SOURCE_DIR}/remill/CFG/CFG.proto")
+protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/CFG/CFG.proto")
 add_custom_target(protobuf_python_module DEPENDS ${PROJECT_PROTOBUFPYTHONMODULE})
+
+# disable -Werror on these file since they have been generated
+set_source_files_properties(${PROJECT_PROTOBUFSOURCEFILES} PROPERTIES COMPILE_FLAGS "-Wno-error")
+set_source_files_properties(${PROJECT_PROTOBUFHEADERFILES} PROPERTIES COMPILE_FLAGS "-Wno-error")
 
 #
 # target settings
 #
 
 add_executable(mcsema-lift
-    EXCLUDE_FROM_ALL
-
     ${PROJECT_PROTOBUFSOURCEFILES}
 
     mcsema/Arch/Arch.cpp
@@ -151,14 +153,20 @@ add_executable(mcsema-lift
     mcsema/BC/Util.cpp
 )
 
+# TODO: these files output a LOT of errors! The following lines can be removed once this issue has been fixed
+set_source_files_properties(mcsema/Arch/Arch.cpp PROPERTIES COMPILE_FLAGS "-Wno-error")
+set_source_files_properties(mcsema/CFG/CFG.cpp PROPERTIES COMPILE_FLAGS "-Wno-error")
+set_source_files_properties(mcsema/BC/External.cpp PROPERTIES COMPILE_FLAGS "-Wno-error")
+
 # this is needed for the #include directives with absolutes paths to work correctly; it must
 # also be set to PUBLIC since remill-lift includes some files directly
 list(APPEND PROJECT_INCLUDEDIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR})
+list(APPEND PROJECT_INCLUDEDIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/mcsema")
 
 add_dependencies(mcsema-lift semantics protobuf_python_module)
 
 target_link_libraries(mcsema-lift PRIVATE remill ${PROJECT_LIBRARIES})
-target_include_directories(mcsema-lift PUBLIC ${PROJECT_INCLUDEDIRECTORIES})
+target_include_directories(mcsema-lift SYSTEM PUBLIC ${PROJECT_INCLUDEDIRECTORIES})
 target_compile_definitions(mcsema-lift PUBLIC ${PROJECT_DEFINITIONS})
 set_target_properties(mcsema-lift PROPERTIES COMPILE_FLAGS ${PROJECT_CXXFLAGS})
 
