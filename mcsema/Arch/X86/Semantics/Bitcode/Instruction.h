@@ -1,7 +1,5 @@
 #pragma once
 
-#include "mcsema/Arch/X86/Runtime/State.h"
-
 #if _WIN32
 #define DOUBLE( x ) x.d
 #else

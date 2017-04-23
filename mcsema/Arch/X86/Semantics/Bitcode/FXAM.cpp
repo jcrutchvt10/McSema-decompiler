@@ -1,4 +1,5 @@
-#include "mcsema/Arch/X86/Semantics/Bitcode/Instruction.h"
+#include "Instruction.h"
+#include "../../Runtime/State.h"
 #include <cmath>
 
 // FXAM semantics are adaptd from Remill

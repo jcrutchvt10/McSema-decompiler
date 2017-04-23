@@ -5,7 +5,12 @@
 #include <llvm/ADT/ArrayRef.h>
 
 #include <llvm/MC/MCContext.h>
-#include <llvm/MC/MCDisassembler.h>
+
+#if MCSEMA_LLVMVERSION >= 400
+  #include <llvm/MC/Disassembler.h>
+#else
+  #include <llvm/MC/MCDisassembler.h>
+#endif
 
 #include <llvm/lib/Target/X86/X86RegisterInfo.h>
 #include <llvm/lib/Target/X86/X86InstrBuilder.h>

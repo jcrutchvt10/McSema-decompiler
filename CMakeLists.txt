@@ -3,256 +3,183 @@
 project(mcsema)
 cmake_minimum_required(VERSION 3.1)
 
-if (NOT MCSEMA_GEN_DIR)
-    set(MCSEMA_GEN_DIR "${CMAKE_BINARY_DIR}/mcsema_generated")
-endif()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(GetGitRevisionDescription)
 
-message(STATUS "Generated files will be stored in the following directory: ${MCSEMA_GEN_DIR}")
+# default build type
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+endif ()
 
-if(WIN32)
-  SET(CMAKE_EXE_LINKER_FLAGS "/LARGEADDRESSAWARE ${CMAKE_EXE_LINKER_FLAGS}")
-endif(WIN32)
+#
+# compiler and linker flags
+#
 
-set(CMAKE_MODULE_PATH "${LLVM_DIR}/cmake/modules" "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_ROOT}/Modules")
+# enable c++11 for all targets
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Configure with the build LLVM
-find_package(LLVM 3.8 REQUIRED CONFIG)
-add_definitions(${LLVM_DEFINITIONS})
+# warnings and compiler settings
+set(PROJECT_CXXWARNINGS "-Wall -Wextra -Werror -Wconversion -pedantic -Wno-unused-parameter -Wno-c++98-compat -Wno-unreachable-code-return -Wno-nested-anon-types -Wno-extended-offsetof -Wno-gnu-anonymous-struct -Wno-gnu-designator -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-statement-expression -Wno-return-type-c-linkage -Wno-c99-extensions -Wno-ignored-attributes -Wno-unused-local-typedef")
+set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -Wno-unknown-warning-option ${PROJECT_CXXWARNINGS} -fPIC -fno-omit-frame-pointer -fvisibility-inlines-hidden -fno-exceptions -fno-asynchronous-unwind-tables -fno-rtti")
 
-include (LLVMUtils)
-include (GetGitRevisionDescription)
+# debug symbols
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -gdwarf-2 -g3")
+endif ()
 
-# we need C++11
-if(NOT WIN32)
-  # WIN32 defaults to CXX11 by default, and setting it explicitly here
-  # confuses clang-cl, which will bail out with "unknown flag -std=g++11"
+# optimization flags and definitions
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -O0")
+else ()
+    set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -O3")
+    list(APPEND PROJECT_DEFINITIONS "NDEBUG")
+endif ()
 
-  #FindPackage for protobuf is terrible for win32
-  # it assumes MSVC built protobuf from a visual studio project
-  #... we build with custom cmake, so it will never be found
-  #... but it should work for other OSes where we install from a package
+#
+# libraries
+#
 
-  set(CMAKE_CXX_STANDARD 11)
+if (DEFINED ENV{TRAILOFBITS_LIBRARIES})
+    set(LIBRARY_REPOSITORY_ROOT $ENV{TRAILOFBITS_LIBRARIES})
+    include("${LIBRARY_REPOSITORY_ROOT}/cmake/repository.cmake")
 
-  if(APPLE)
-      set(PROTOBUF_ROOT "${CMAKE_SOURCE_DIR}/third_party/protobuf")
-      set(Protobuf_LIBRARIES "${PROTOBUF_ROOT}/build/lib")
-      set(Protobuf_INCLUDE_DIR "${PROTOBUF_ROOT}/src")
-  endif()
+    message(STATUS "Using the following library repository: ${LIBRARY_REPOSITORY_ROOT}")
+else ()
+    message(STATUS "Using system libraries")
+endif ()
 
-  find_package(Protobuf REQUIRED)
-else()
-   string(REGEX REPLACE "\\\\" "/" CMAKE_SOURCE_DIR ${CMAKE_SOURCE_DIR})
-   # on win32, manuallys set protobuf goodness
-   set(PROTOBUF_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/include")
-   set(PROTOBUF_LIBRARIES "${CMAKE_SOURCE_DIR}/lib/protobuf.lib")
-   set(PROTOBUF_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/bin/protoc.exe")
-endif()
+# llvm
+find_package(LLVM REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
 
-include_directories(${PROTOBUF_INCLUDE_DIRS})
+llvm_map_components_to_libnames(LLVM_LIBRARIES all)
+list(APPEND PROJECT_LIBRARIES ${LLVM_LIBRARIES})
+list(APPEND PROJECT_DEFINITIONS ${LLVM_DEFINITIONS})
+list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES ${LLVM_INCLUDE_DIRS})
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/third_party)
-include_directories(${MCSEMA_LLVM_DIR})
-include_directories(${MCSEMA_LLVM_DIR}/include)
-include_directories(${MCSEMA_LLVM_DIR}/lib/Target/X86/)
-include_directories(${MCSEMA_BUILD_DIR}/include)
-include_directories(${MCSEMA_BUILD_DIR}/llvm/include)
-include_directories(${MCSEMA_BUILD_DIR}/llvm/lib/Target/X86)
-include_directories(${MCSEMA_GEN_DIR})
+string(REPLACE "." "" MCSEMA_LLVMVERSION ${LLVM_PACKAGE_VERSION})
+list(APPEND PROJECT_DEFINITIONS "MCSEMA_LLVMVERSION=${MCSEMA_LLVMVERSION}")
 
-# Make sure we can find the mcsema headers.
-include_directories(${CMAKE_SOURCE_DIR}/mcsema)
-include_directories(${CMAKE_SOURCE_DIR}/mcsema/binary_common)
-include_directories(${CMAKE_SOURCE_DIR}/mcsema/cfgToLLVM)
-include_directories(${CMAKE_SOURCE_DIR}/mcsema/common)
-include_directories(${CMAKE_SOURCE_DIR}/mcsema/peToCFG)
-include_directories(${CMAKE_SOURCE_DIR}/mcsema/cfgToLLVM)
+list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${CMAKE_SOURCE_DIR}/LLVMPrivateHeaders/${MCSEMA_LLVMVERSION}")
+list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${CMAKE_SOURCE_DIR}/LLVMPrivateHeaders/${MCSEMA_LLVMVERSION}/llvm/lib/Target/X86")
 
-if(WIN32)
-  add_compile_options(
-    /nologo
-    /DGOOGLE_PROTOBUF_NO_RTTI
-    /W3
-    /wd4141 # Suppress ''modifier' : used more than once' (because of __forceinline combined with inline)
-    /wd4146 # Suppress 'unary minus operator applied to unsigned type, result still unsigned'
-    /wd4180 # Suppress 'qualifier applied to function type has no meaning; ignored'
-    /wd4244 # Suppress ''argument' : conversion from 'type1' to 'type2', possible loss of data'
-    /wd4258 # Suppress ''var' : definition from the for loop is ignored; the definition from the enclosing scope is used'
-    /wd4267 # Suppress ''var' : conversion from 'size_t' to 'type', possible loss of data'
-    /wd4291 # Suppress ''declaration' : no matching operator delete found; memory will not be freed if initialization throws an exception'
-    /wd4345 # Suppress 'behavior change: an object of POD type constructed with an initializer of the form () will be default-initialized'
-    /wd4351 # Suppress 'new behavior: elements of array 'array' will be default initialized'
-    /wd4355 # Suppress ''this' : used in base member initializer list'
-    /wd4456 # Suppress 'declaration of 'var' hides local variable'
-    /wd4457 # Suppress 'declaration of 'var' hides function parameter'
-    /wd4458 # Suppress 'declaration of 'var' hides class member'
-    /wd4459 # Suppress 'declaration of 'var' hides global declaration'
-    /wd4503 # Suppress ''identifier' : decorated name length exceeded, name was truncated'
-    /wd4624 # Suppress ''derived class' : destructor could not be generated because a base class destructor is inaccessible'
-    /wd4722 # Suppress 'function' : destructor never returns, potential memory leak
-    /wd4800 # Suppress ''type' : forcing value to bool 'true' or 'false' (performance warning)'
-    /wd4100 # Suppress 'unreferenced formal parameter'
-    /wd4127 # Suppress 'conditional expression is constant'
-    /wd4512 # Suppress 'assignment operator could not be generated'
-    /wd4505 # Suppress 'unreferenced local function has been removed'
-    /wd4610 # Suppress '<class> can never be instantiated'
-    /wd4510 # Suppress 'default constructor could not be generated'
-    /wd4702 # Suppress 'unreachable code'
-    /wd4245 # Suppress 'signed/unsigned mismatch'
-    /wd4706 # Suppress 'assignment within conditional expression'
-    /wd4310 # Suppress 'cast truncates constant value'
-    /wd4701 # Suppress 'potentially uninitialized local variable'
-    /wd4703 # Suppress 'potentially uninitialized local pointer variable'
-    /wd4389 # Suppress 'signed/unsigned mismatch'
-    /wd4611 # Suppress 'interaction between '_setjmp' and C++ object destruction is non-portable'
-    /wd4805 # Suppress 'unsafe mix of type <type> and type <type> in operation'
-    /wd4204 # Suppress 'nonstandard extension used : non-constant aggregate initializer'
-    /wd4577 # Suppress 'noexcept used with no exception handling mode specified; termination on exception is not guaranteed'
-    /wd4091 # Suppress 'typedef: ignored on left of '' when no variable is declared'
-        # C4592 is disabled because of false positives in Visual Studio 2015
-        # Update 1. Re-evaluate the usefulness of this diagnostic with Update 2.
-    /wd4592 # Suppress ''var': symbol will be dynamically initialized (implementation limitation)
+# protobuf
+find_package(Protobuf REQUIRED)
+list(APPEND PROJECT_LIBRARIES ${Protobuf_LIBRARIES})
+list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES ${Protobuf_INCLUDE_DIR})
+list(APPEND PROJECT_DEFINITIONS "GOOGLE_PROTOBUF_NO_RTTI")
 
-	# Ideally, we'd like this warning to be enabled, but MSVC 2013 doesn't
-	# support the 'aligned' attribute in the way that clang sources requires (for
-	# any code that uses the LLVM_ALIGNAS macro), so this is must be disabled to
-	# avoid unwanted alignment warnings.
-	# When we switch to requiring a version of MSVC that supports the 'alignas'
-	# specifier (MSVC 2015?) this warning can be re-enabled.
-    /wd4324 # Suppress 'structure was padded due to __declspec(align())'
-    /D_CRT_SECURE_NO_DEPRECATE
-    /D_CRT_SECURE_NO_WARNINGS
-    /D_CRT_NONSTDC_NO_DEPRECATE
-    /D_CRT_NONSTDC_NO_WARNINGS
-    /D_SCL_SECURE_NO_DEPRECATE
-    /D_SCL_SECURE_NO_WARNINGS
-    )
-else()
-  add_compile_options(
-    -g3
-    -O0)
-
-  if(NOT LLVM_ENABLE_RTTI)
-    add_compile_options(
-      -fno-rtti
-      -DGOOGLE_PROTOBUF_NO_RTTI)
-  endif()
-endif(WIN32)
+#
+# version information
+#
 
 # configure a header file to pass some of the CMake settings
 # to the source code
-
 git_describe(MCSEMA_VERSION_STRING)
 git_get_branch(MCSEMA_BRANCH_NAME)
 
 if(NOT MCSEMA_VERSION_STRING)
-  set(MCSEMA_VERSION_STRING "unknown")
+    set(MCSEMA_VERSION_STRING "unknown")
 endif()
 
 if(NOT MCSEMA_BRANCH_NAME)
-  set(MCSEMA_BRANCH_NAME "unknown")
+    set(MCSEMA_BRANCH_NAME "unknown")
 endif()
 
-configure_file (
-  "mcsema/Version.h.in" #input is based on CMAKE_SOURCE_DIR
-  "${MCSEMA_GEN_DIR}/Version.h" #output is based on CMAKE_BINARY_DIR
-)
-
-# Make sure we find Version.h
-include_directories("${CMAKE_BINARY_DIR}")
+configure_file("mcsema/Version.h.in" "${CMAKE_BINARY_DIR}/mcsema_version.h")
 
 #
-# protobuf file generation
-# this will make sure that the protobuf files are generated each time
-# the CFG.h header file is modified
+# protobuf file generation 
 #
 
-set(PROTOBUF_CONFIGURATION "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+# this function can't be told where to store the output files! we have to add the whole binary directory
+# to the include directories (or change it and lose compatibility with the system libraries)
+protobuf_generate_cpp(PROJECT_PROTOBUFSOURCEFILES PROJECT_PROTOBUFHEADERFILES "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+list(APPEND PROJECT_INCLUDEDIRECTORIES ${CMAKE_CURRENT_BINARY_DIR})
 
-set(PROTOBUF_OUTPUT_FILE_LIST
-    "${MCSEMA_GEN_DIR}/CFG.pb.cc"
-    "${MCSEMA_GEN_DIR}/CFG.pb.h"
-    "${MCSEMA_GEN_DIR}/CFG_pb2.py"
+protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+add_custom_target(protobuf_python_module DEPENDS ${PROJECT_PROTOBUFPYTHONMODULE})
+
+#
+# target settings
+#
+
+include(LLVMUtils)
+
+# get the submodules; this is going to add source files inside PROJECT_SOURCEFILES
+message(STATUS "Scanning for architecture modules...")
+file(GLOB architecture_modules LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/Arch/*")
+
+foreach(module_path ${architecture_modules})
+    if (NOT IS_DIRECTORY ${module_path})
+        continue ()
+    endif ()
+
+    if (NOT EXISTS ${module_path}/CMakeLists.txt)
+        continue ()
+    endif ()
+
+    get_filename_component(module_name "${module_path}" NAME)
+    message(STATUS "Found new architecture module: ${module_name}")
+
+    add_subdirectory("${module_path}")
+    list(APPEND PROJECT_SOURCEFILES ${MODULE_${module_name}_SOURCEFILES})
+    list(APPEND PROJECT_INCLUDEDIRECTORIES ${MODULE_${module_name}_INCLUDEDIRECTORIES})
+endforeach ()
+
+set(PROJECT_INCLUDEDIRECTORIES
+    ${MCSEMA_LLVM_DIR}
+    ${MCSEMA_LLVM_DIR}/include
+    ${MCSEMA_LLVM_DIR}/lib/Target/X86/
+
+    ${CMAKE_BINARY_DIR}
+
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/mcsema
+    ${CMAKE_SOURCE_DIR}/mcsema/binary_common
+    ${CMAKE_SOURCE_DIR}/mcsema/cfgToLLVM
+    ${CMAKE_SOURCE_DIR}/mcsema/common
+    ${CMAKE_SOURCE_DIR}/mcsema/peToCFG
+    ${CMAKE_SOURCE_DIR}/mcsema/cfgToLLVM
+    ${CMAKE_SOURCE_DIR}/third_party
 )
 
-add_custom_command(
-    OUTPUT ${PROTOBUF_OUTPUT_FILE_LIST}
+set(PROJECT_SOURCEFILES
+    ${PROJECT_SOURCEFILES}
 
-    COMMAND "${PROTOBUF_PROTOC_EXECUTABLE}" --cpp_out "${MCSEMA_GEN_DIR}" --python_out "${MCSEMA_GEN_DIR}" --proto_path "${CMAKE_SOURCE_DIR}/mcsema/CFG" "${PROTOBUF_CONFIGURATION}"
+    # both files are marked as auto-generated and will trigger
+    # protobuf in case either is missing
+    ${PROJECT_PROTOBUFSOURCEFILES}
+    ${PROJECT_PROTOBUFHEADERFILES}
 
-    DEPENDS "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.h"
-    MAIN_DEPENDENCY "${PROTOBUF_CONFIGURATION}"
+    mcsema/Lift.cpp
+    mcsema/CFG/CFG.cpp
+    mcsema/Arch/Arch.cpp
 
-    COMMENT "Generating protobuf files..."
-    VERBATIM
+    mcsema/BC/Lift.cpp
+    mcsema/BC/Util.cpp
+
+    mcsema/cfgToLLVM/JumpTables.cpp
+    mcsema/cfgToLLVM/TransExcn.cpp
 )
 
-# mcsema source files
-add_executable(mcsema-lift
-  ${CMAKE_SOURCE_DIR}/mcsema/Lift.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/Arch.cpp
-  
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Dispatch.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Lift.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Register.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Util.cpp
+add_executable(mcsema-lift ${PROJECT_SOURCEFILES})
+target_link_libraries(mcsema-lift PRIVATE ${PROJECT_LIBRARIES})
+target_include_directories(mcsema-lift SYSTEM PRIVATE ${PROJECT_SYSTEMINCLUDEDIRECTORIES})
+target_include_directories(mcsema-lift PRIVATE ${PROJECT_INCLUDEDIRECTORIES})
+target_compile_definitions(mcsema-lift PRIVATE ${PROJECT_DEFINITIONS})
 
-  ${CMAKE_SOURCE_DIR}/mcsema/BC/Lift.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/BC/Util.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.cpp
-  ${CMAKE_BINARY_DIR}/mcsema_generated/CFG.pb.cc
+# make sure the python module is generated
+add_dependencies(mcsema-lift protobuf_python_module)
 
-  ${CMAKE_SOURCE_DIR}/mcsema/cfgToLLVM/JumpTables.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/cfgToLLVM/TransExcn.cpp
-
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/ADD.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/bitops.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/Branches.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/CMOV.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/CMPTEST.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/Exchanges.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/fpu.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/INCDECNEG.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/Jcc.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/Misc.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/MOV.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/MULDIV.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/SETcc.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/ShiftRoll.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/SSE.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/Stack.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/String.cpp
-  ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/SUB.cpp)
-
-target_link_libraries(mcsema-lift
-  ${PROTOBUF_LIBRARIES}
-  LLVMBitReader
-  LLVMBitWriter
-  LLVMMCDisassembler
-  LLVMX86Disassembler
-  LLVMX86AsmParser
-  LLVMX86CodeGen
-  LLVMSelectionDAG
-  LLVMAsmPrinter
-  LLVMX86Desc
-  LLVMX86Info
-  LLVMX86AsmPrinter
-  LLVMX86Utils
-  LLVMipo
-  LLVMTransformUtils
-  LLVMScalarOpts
-  LLVMInstrumentation
-  LLVMObjCARCOpts)
-
-#TODO(artem):  Make this ${CMAKE_SOURCE_DIR}/mcsema/Arch/X86 and have a 
-# CMakeLists.txt there add any relevant subdirs
-add_subdirectory(${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Semantics/Bitcode)
-add_subdirectory(${CMAKE_SOURCE_DIR}/mcsema/Arch/X86/Runtime)
+#
+# install directives
+#
 
 install(
-  TARGETS mcsema-lift 
-  RUNTIME DESTINATION bin
-  LIBRARY DESTINATION lib)
+    TARGETS mcsema-lift 
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+)
 
-install(FILES "${MCSEMA_GEN_DIR}/CFG_pb2.py" DESTINATION "${CMAKE_SOURCE_DIR}/tools/mcsema_disass/ida")
+install(FILES "${PROJECT_PROTOBUFPYTHONMODULE}" DESTINATION "${CMAKE_SOURCE_DIR}/tools/mcsema_disass/ida")

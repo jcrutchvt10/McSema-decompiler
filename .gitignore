@@ -44,6 +44,13 @@ bin
 tests/linux/x86/*.elf
 tests/linux/amd64/*.elf
 
+#IDE
+.idea
+CMakeLists.txt.user
+cmake-debug-build
+cmake-release-build
+.vscode
+
 #==============================================================================#
 # Directories to ignore (do not add trailing '/'s, they skip symlinks).
 #==============================================================================#

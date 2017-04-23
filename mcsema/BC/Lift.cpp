@@ -28,7 +28,11 @@
 
 #include <llvm/ADT/StringSwitch.h>
 
-#include <llvm/Bitcode/ReaderWriter.h>
+#if MCSEMA_LLVMVERSION >= 400
+  #include <llvm/Bitcode/BitcodeReader.h>
+#else
+  #include <llvm/Bitcode/Reader.h>
+#endif
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>

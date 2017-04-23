@@ -33,7 +33,7 @@
 #include <sstream>
 #include <utility>
 
-#include <mcsema_generated/CFG.pb.h>  // Auto-generated.
+#include <CFG.pb.h>  // Auto-generated.
 
 #include "mcsema/Arch/Arch.h"
 #include "mcsema/CFG/CFG.h"
