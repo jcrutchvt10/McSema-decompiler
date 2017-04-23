@@ -1,3 +1,8 @@
+cmake_minimum_required(VERSION 3.1)
+
+# common settings
+include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
+
 # Copyright 2017 Peter Goodman (peter@trailofbits.com), all rights reserved.
 enable_language(ASM)
 

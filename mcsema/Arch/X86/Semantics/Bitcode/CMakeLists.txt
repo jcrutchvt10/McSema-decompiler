@@ -1,3 +1,8 @@
+cmake_minimum_required(VERSION 3.1)
+
+# common settings
+include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
+
 # manually list every file that goes into the semantics targets.
 # There are ways to do a glob(),but they require cmake to be manually 
 # re-run.

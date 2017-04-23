@@ -40,8 +40,9 @@ class LinuxTest(unittest.TestCase):
             os.mkdir(self.archdirs[arch])
 
         self.my_dir = os.path.dirname(__file__)
-        self.mcsema_lift = os.path.realpath(
-            os.path.join(self.my_dir, "../", "bin", "mcsema-lift"))
+
+        self.mcsema_lift = os.environ["MCSEMA_BUILD_FOLDER"] + "/mcsema-lift"
+        self.assertTrue(len(self.mcsema_lift) > 0)
 
         if self.on_test_os:
             # we can only rebuild binaries if we are running on the same OS
@@ -53,13 +54,13 @@ class LinuxTest(unittest.TestCase):
                     self.configs[arch] = json.load(jsonfile)
 
             try:
-                clang_file = subprocess.check_output(["which", "clang-3.8"])
+                clang_file = subprocess.check_output(["which", "clang"])
                 self.clang = clang_file.strip()
             except OSError as oe:
-                sys.stderr.write("Could not find clang-3.8: {}\n".format(str(oe)))
+                sys.stderr.write("Could not find clang: {}\n".format(str(oe)))
                 raise oe
             except subprocess.CalledProcessError as ce:
-                sys.stderr.write("Could not find clang-3.8: {}\n".format(str(ce)))
+                sys.stderr.write("Could not find clang: {}\n".format(str(ce)))
                 raise ce
 
 

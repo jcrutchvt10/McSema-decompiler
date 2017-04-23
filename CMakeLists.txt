@@ -3,56 +3,24 @@
 project(mcsema)
 cmake_minimum_required(VERSION 3.1)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-include(GetGitRevisionDescription)
-
-# default build type
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "RelWithDebInfo")
-endif ()
-
-#
-# compiler and linker flags
-#
-
-# enable c++11 for all targets
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# warnings and compiler settings
-set(PROJECT_CXXWARNINGS "-Wall -Wextra -Werror -Wconversion -pedantic -Wno-unused-parameter -Wno-c++98-compat -Wno-unreachable-code-return -Wno-nested-anon-types -Wno-extended-offsetof -Wno-gnu-anonymous-struct -Wno-gnu-designator -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-statement-expression -Wno-return-type-c-linkage -Wno-c99-extensions -Wno-ignored-attributes -Wno-unused-local-typedef")
-set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -Wno-unknown-warning-option ${PROJECT_CXXWARNINGS} -fPIC -fno-omit-frame-pointer -fvisibility-inlines-hidden -fno-exceptions -fno-asynchronous-unwind-tables -fno-rtti")
-
-# debug symbols
-if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -gdwarf-2 -g3")
-endif ()
-
-# optimization flags and definitions
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -O0")
-else ()
-    set(PROJECT_CXXFLAGS "${PROJECT_CXXFLAGS} -O3")
-    list(APPEND PROJECT_DEFINITIONS "NDEBUG")
-endif ()
+# common settings
+include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
 
 #
 # libraries
 #
 
-if (DEFINED ENV{TRAILOFBITS_LIBRARIES})
-    set(LIBRARY_REPOSITORY_ROOT $ENV{TRAILOFBITS_LIBRARIES})
-    include("${LIBRARY_REPOSITORY_ROOT}/cmake/repository.cmake")
-
-    message(STATUS "Using the following library repository: ${LIBRARY_REPOSITORY_ROOT}")
-else ()
-    message(STATUS "Using system libraries")
-endif ()
-
 # llvm
 find_package(LLVM REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
 
-llvm_map_components_to_libnames(LLVM_LIBRARIES all)
+# todo: this is a hack to solve the linking issues
+# we are linking against every architecture supported; this will bring in any other dependency mcsema uses
+llvm_map_components_to_libnames(LLVM_LIBRARIES
+    aarch64asmparser amdgpuasmparser armasmparser asmparser hexagonasmparser lanaiasmparser mcparser mipsasmparser mirparser powerpcasmparser sparcasmparser systemzasmparser x86asmparser
+    aarch64desc amdgpudesc armdesc bpfdesc hexagondesc lanaidesc mipsdesc msp430desc nvptxdesc powerpcdesc riscvdesc sparcdesc systemzdesc x86desc xcoredesc
+    aarch64disassembler amdgpudisassembler armdisassembler bpfdisassembler hexagondisassembler lanaidisassembler mcdisassembler mipsdisassembler powerpcdisassembler sparcdisassembler systemzdisassembler x86disassembler xcoredisassembler
+)
+
 list(APPEND PROJECT_LIBRARIES ${LLVM_LIBRARIES})
 list(APPEND PROJECT_DEFINITIONS ${LLVM_DEFINITIONS})
 list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES ${LLVM_INCLUDE_DIRS})
