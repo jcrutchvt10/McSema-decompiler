@@ -13,12 +13,9 @@ include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
 # llvm
 find_package(LLVM REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
 
-# todo: this is a hack to solve the linking issues
-# we are linking against every architecture supported; this will bring in any other dependency mcsema uses
 llvm_map_components_to_libnames(LLVM_LIBRARIES
-    aarch64asmparser amdgpuasmparser armasmparser asmparser hexagonasmparser lanaiasmparser mcparser mipsasmparser mirparser powerpcasmparser sparcasmparser systemzasmparser x86asmparser
-    aarch64desc amdgpudesc armdesc bpfdesc hexagondesc lanaidesc mipsdesc msp430desc nvptxdesc powerpcdesc riscvdesc sparcdesc systemzdesc x86desc xcoredesc
-    aarch64disassembler amdgpudisassembler armdisassembler bpfdisassembler hexagondisassembler lanaidisassembler mcdisassembler mipsdisassembler powerpcdisassembler sparcdisassembler systemzdisassembler x86disassembler xcoredisassembler
+    asmparser mcparser mipsasmparser x86asmparser mipsdesc x86desc mcdisassembler mipsdisassembler x86disassembler
+    bitreader bitwriter
 )
 
 list(APPEND PROJECT_LIBRARIES ${LLVM_LIBRARIES})

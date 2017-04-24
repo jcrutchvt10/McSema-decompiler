@@ -174,10 +174,15 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
     return false;
   }
 
-  llvm::InitializeAllTargetInfos();
-  llvm::InitializeAllTargetMCs();
-  llvm::InitializeAllAsmParsers();
-  llvm::InitializeAllDisassemblers();
+  LLVMInitializeX86TargetInfo();
+  LLVMInitializeX86TargetMC();
+  LLVMInitializeX86AsmParser();
+  LLVMInitializeX86Disassembler();
+
+  LLVMInitializeMipsTargetInfo();
+  LLVMInitializeMipsTargetMC();
+  LLVMInitializeMipsAsmParser();
+  LLVMInitializeMipsDisassembler();
 
   if (arch == "x86" || arch == "amd64") {
     X86InitRegisterState(context);
@@ -192,6 +197,8 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
     ArchGetOrCreateRegStateTracer = X86GetOrCreateRegStateTracer;
     ArchGetOrCreateSemantics = X86GetOrCreateSemantics;
     ArchLiftInstruction = X86LiftInstruction;
+  } else if (arch == "mips") {
+    return false;
   } else {
     return false;
   }
