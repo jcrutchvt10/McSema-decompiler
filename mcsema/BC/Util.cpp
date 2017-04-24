@@ -7,6 +7,7 @@
 
 #include "mcsema/Arch/Arch.h"
 #include "mcsema/Arch/Register.h"
+#include "mcsema/Globals.h"
 #include "mcsema/BC/Util.h"
 
 #include "mcsema/cfgToLLVM/TransExcn.h"
@@ -33,7 +34,7 @@ llvm::ConstantInt *CreateConstantInt(int width, uint64_t val) {
 llvm::FunctionType *LiftedFunctionType(void) {
   static llvm::FunctionType *func_type = nullptr;
   if (!func_type) {
-    auto state_type = ArchRegStateStructType();
+    auto state_type = architecture_module->getRegisterStateStructureType();
     auto state_ptr_type = llvm::PointerType::get(state_type, 0);
     std::vector<llvm::Type *> arg_types;
     arg_types.push_back(state_ptr_type);
@@ -132,7 +133,7 @@ llvm::Value *ADDR_TO_POINTER_V(llvm::BasicBlock *b, llvm::Value *memAddr,
 
 static llvm::Value *GetReadReg(llvm::Function *F, MCSemaRegs reg) {
   std::stringstream ss;
-  ss << ArchRegisterName(reg) << "_read";
+  ss << architecture_module->getRegisterName(reg) << "_read";
   auto reg_name = ss.str();
 
   for (llvm::Instruction &I : F->front()) {
@@ -149,7 +150,7 @@ static llvm::Value *GetReadReg(llvm::Function *F, MCSemaRegs reg) {
 
 static llvm::Value *GetWriteReg(llvm::Function *F, MCSemaRegs reg) {
   std::stringstream ss;
-  ss << ArchRegisterName(reg) << "_write";
+  ss << architecture_module->getRegisterName(reg) << "_write";
   auto reg_name = ss.str();
 
   for (llvm::Instruction &I : F->front()) {
@@ -223,7 +224,7 @@ llvm::Value *GENERIC_MC_READREG(llvm::BasicBlock *B, MCSemaRegs mc_reg,
 }
 
 llvm::Value *GENERIC_READREG(llvm::BasicBlock *b, MCSemaRegs reg) {
-  return GENERIC_MC_READREG(b, reg, ArchRegisterSize(reg));
+  return GENERIC_MC_READREG(b, reg, architecture_module->getRegisterSize(reg));
 }
 
 void GENERIC_WRITEREG(llvm::BasicBlock *b, MCSemaRegs reg, llvm::Value *v) {

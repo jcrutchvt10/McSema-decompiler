@@ -26,7 +26,7 @@
 
 #include "mcsema/cfgToLLVM/TransExcn.h"
 
-#include <mcsema/module_interface.h>
+#include <mcsema/Globals.h>
 #include <mcsema/mips/interface.h>
 
 namespace {
@@ -62,9 +62,11 @@ static bool InitInstructionDecoder(void) {
 
 }  // namespace
 
+//
+// dummy class to encapsulate the X86 module into
+// the new interface (pending a refactor)
+//
 
-// Forward declare all of the various x86-specific initializers and
-// accessors.
 void X86InitRegisterState(llvm::LLVMContext *);
 void X86InitInstructionDispatch(DispatchMap &dispatcher);
 const std::string &X86RegisterName(MCSemaRegs reg);
@@ -76,22 +78,73 @@ unsigned X86RegisterSize(MCSemaRegs reg);
 llvm::StructType *X86RegStateStructType(void);
 llvm::Function *X86GetOrCreateRegStateTracer(llvm::Module *);
 llvm::Function *X86GetOrCreateSemantics(llvm::Module *, const std::string &instr);
-InstTransResult X86LiftInstruction(
-    TranslationContext &, llvm::BasicBlock *&, InstructionLifter *);
+InstTransResult X86LiftInstruction(TranslationContext &, llvm::BasicBlock *&, InstructionLifter *);
+
+class X86Module final : public IMCSemaModule {
+public:
+  X86Module() {
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeX86AsmParser();
+    LLVMInitializeX86Disassembler();
+  }
+
+  virtual ~X86Module() {
+  }
+
+  // IMCSemaModule interface
+  virtual std::string getRegisterName(MCSemaRegs id) const noexcept override {
+    return X86RegisterName(id);
+  }
+
+  virtual MCSemaRegs getRegisterId(const std::string &name) const noexcept override {
+    return X86RegisterNumber(name);
+  }
+
+  virtual MCSemaRegs getRegisterParent(MCSemaRegs id) const noexcept override {
+    return X86RegisterParent(id);
+  }
+
+  virtual llvm::StructType *getRegisterStateStructureType() const noexcept override {
+    return X86RegStateStructType();
+  }
+
+  virtual void allocateRegisterVariables(llvm::BasicBlock *basic_block) const noexcept override {
+    X86AllocRegisterVars(basic_block);
+  }
+
+  virtual std::uint32_t getRegisterOffset(MCSemaRegs id) const noexcept override {
+    return X86RegisterOffset(id);
+  }
+
+  virtual std::size_t getRegisterSize(MCSemaRegs id) const noexcept override {
+    return X86RegisterSize(id);
+  }
+
+  virtual InstTransResult liftInstruction(TranslationContext &context, llvm::BasicBlock *&basic_block, InstructionLifter *lifter) const noexcept override {
+    return X86LiftInstruction(context, basic_block, lifter);
+  }
+
+  virtual llvm::Function *processSemantics(llvm::Module *module, const std::string &unknown) const noexcept override {
+    return X86GetOrCreateSemantics(module, unknown);
+  }
+
+  virtual llvm::Function *createRegisterStateTracer(llvm::Module *module) const noexcept override {
+    return X86GetOrCreateRegStateTracer(module);
+  }
+
+  virtual void initializeRegisterState(llvm::LLVMContext *context) const noexcept override {
+    X86InitRegisterState(context);
+
+  }
+
+  virtual void initializeInstructionDispatchTable(DispatchMap &dispatch_map) const noexcept override {
+    X86InitInstructionDispatch(gDispatcher);
+  }
+};
+
 
 // Define the generic arch function pointers.
-const std::string &(*ArchRegisterName)(MCSemaRegs) = nullptr;
-MCSemaRegs (*ArchRegisterNumber)(const std::string &) = nullptr;
-unsigned (*ArchRegisterOffset)(MCSemaRegs) = nullptr;
-MCSemaRegs (*ArchRegisterParent)(MCSemaRegs) = nullptr;
-void (*ArchAllocRegisterVars)(llvm::BasicBlock *) = nullptr;
-unsigned (*ArchRegisterSize)(MCSemaRegs) = nullptr;
-llvm::StructType *(*ArchRegStateStructType)(void) = nullptr;
-llvm::Function *(*ArchGetOrCreateRegStateTracer)(llvm::Module *) = nullptr;
-llvm::Function *(*ArchGetOrCreateSemantics)(llvm::Module *, const std::string &) = nullptr;
-InstTransResult (*ArchLiftInstruction)(
-    TranslationContext &, llvm::BasicBlock *&, InstructionLifter *) = nullptr;
-
 bool ListArchSupportedInstructions(const std::string &triple, llvm::raw_ostream &s, bool ListSupported, bool ListUnsupported) {
   std::string errstr;
   auto target = llvm::TargetRegistry::lookupTarget(triple, errstr);
@@ -182,42 +235,11 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
   }
 
   if (arch == "x86" || arch == "amd64") {
-    LLVMInitializeX86TargetInfo();
-    LLVMInitializeX86TargetMC();
-    LLVMInitializeX86AsmParser();
-    LLVMInitializeX86Disassembler();
-
-    X86InitRegisterState(context);
-    X86InitInstructionDispatch(gDispatcher);
-    ArchRegisterName = X86RegisterName;
-    ArchRegisterNumber = X86RegisterNumber;
-    ArchRegisterOffset = X86RegisterOffset;
-    ArchRegisterParent = X86RegisterParent;
-    ArchRegisterSize = X86RegisterSize;
-    ArchAllocRegisterVars = X86AllocRegisterVars;
-    ArchRegStateStructType = X86RegStateStructType;
-    ArchGetOrCreateRegStateTracer = X86GetOrCreateRegStateTracer;
-    ArchGetOrCreateSemantics = X86GetOrCreateSemantics;
-    ArchLiftInstruction = X86LiftInstruction;
-  } else if (arch == "mips") {
-    MCSemaModuleInterface module_interface = mcsema::mips::GetInterface();
-
-    ArchRegisterName = module_interface.translation.registerName;
-    ArchRegisterNumber = module_interface.translation.registerNumber;
-    ArchRegisterOffset = module_interface.translation.registerOffset;
-    ArchRegisterParent = module_interface.translation.registerParent;
-    ArchRegisterSize = module_interface.translation.registerSize;
-    ArchAllocRegisterVars = module_interface.translation.allocateRegisterVariables;
-    ArchRegStateStructType = module_interface.translation.registerStateStructureType;
-    ArchGetOrCreateRegStateTracer = module_interface.translation.createRegisterStateTracer;
-    ArchGetOrCreateSemantics = module_interface.translation.createSemantics;
-    ArchLiftInstruction = module_interface.translation.liftInstruction;
-
-    module_interface.initializeLLVMComponents();
-    module_interface.initializeRegisterState(context);
-    module_interface.initializeInstructionDispatchTable(gDispatcher);
-
+    architecture_module = llvm::make_unique<X86Module>();
+  } else if (arch == "mips32" || arch == "mips64") {
+    architecture_module = std::unique_ptr<IMCSemaModule>(mcsema::mips::CreateModule(arch));
   } else {
+    std::cerr << "Invalid architecture" << std::endl;
     return false;
   }
 

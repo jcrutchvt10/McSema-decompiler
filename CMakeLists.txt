@@ -83,8 +83,13 @@ add_custom_target(protobuf_python_module DEPENDS ${PROJECT_PROTOBUFPYTHONMODULE}
 
 include(LLVMUtils)
 
-# get the submodules; this is going to add source files inside PROJECT_SOURCEFILES
-message(STATUS "Scanning for architecture modules...")
+# get the submodules
+message(STATUS "Adding built-in module: X86")
+add_subdirectory(${CMAKE_SOURCE_DIR}/mcsema/Arch/X86)
+list(APPEND PROJECT_SOURCEFILES ${MODULE_X86_SOURCEFILES})
+list(APPEND PROJECT_INCLUDEDIRECTORIES ${MODULE_X86_INCLUDEDIRECTORIES})
+
+message(STATUS "Scanning for additional architecture modules...")
 file(GLOB architecture_modules LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/mcsema/Arch/*")
 
 foreach(module_path ${architecture_modules})
@@ -97,19 +102,15 @@ foreach(module_path ${architecture_modules})
     endif ()
 
     get_filename_component(module_name "${module_path}" NAME)
+    if (${module_name} STREQUAL "X86")
+      continue ()
+    endif()
+
     add_subdirectory("${module_path}")
+    message(STATUS " > ${module_name}")
 
-    if (DEFINED MODULE_${module_name}_SOURCEFILES)
-        message(STATUS " > ${module_name} (old style)")
-
-        list(APPEND PROJECT_SOURCEFILES ${MODULE_${module_name}_SOURCEFILES})
-        list(APPEND PROJECT_INCLUDEDIRECTORIES ${MODULE_${module_name}_INCLUDEDIRECTORIES})
-    else ()
-        message(STATUS " > ${module_name} (new style)")
-
-        string(TOLOWER "mcsema-${module_name}" module_target)
-        list(APPEND PROJECT_LIBRARIES ${module_target})
-    endif ()
+    string(TOLOWER "mcsema-${module_name}" module_target)
+    list(APPEND PROJECT_LIBRARIES ${module_target})
 endforeach ()
 
 set(PROJECT_INCLUDEDIRECTORIES
@@ -136,15 +137,30 @@ set(PROJECT_SOURCEFILES
     ${PROJECT_PROTOBUFSOURCEFILES}
     ${PROJECT_PROTOBUFHEADERFILES}
 
-    mcsema/Lift.cpp
-    mcsema/CFG/CFG.cpp
+    mcsema/Arch/Arch.h
     mcsema/Arch/Arch.cpp
+    mcsema/Arch/Dispatch.h
+    mcsema/Arch/Register.h
 
+    mcsema/Globals.h
+    mcsema/Globals.cpp
+    mcsema/Lift.cpp
+
+    mcsema/BC/Lift.h
     mcsema/BC/Lift.cpp
+    mcsema/BC/Util.h
     mcsema/BC/Util.cpp
 
+    mcsema/CFG/Externals.h
+    mcsema/CFG/CFG.h
+    mcsema/CFG/CFG.cpp
+
+    mcsema/cfgToLLVM/JumpTables.h
     mcsema/cfgToLLVM/JumpTables.cpp
+    mcsema/cfgToLLVM/TransExcn.h
     mcsema/cfgToLLVM/TransExcn.cpp
+
+    mcsema/include/mcsema/IMCSemaModule.h
 )
 
 add_executable(mcsema-lift ${PROJECT_SOURCEFILES})

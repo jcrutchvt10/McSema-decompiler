@@ -54,6 +54,7 @@
 #include "mcsema/BC/Lift.h"
 #include "mcsema/BC/Util.h"
 #include "mcsema/CFG/CFG.h"
+#include "mcsema/Globals.h"
 
 #include "mcsema/CFG/Externals.h"
 #include "mcsema/cfgToLLVM/TransExcn.h"
@@ -136,7 +137,7 @@ static void CreateInstrBreakpoint(llvm::BasicBlock *B, VA pc) {
 static void AddRegStateTracer(llvm::BasicBlock *B) {
   auto F = B->getParent();
   auto M = F->getParent();
-  auto IFT = ArchGetOrCreateRegStateTracer(M);
+  auto IFT = architecture_module->createRegisterStateTracer(M);
 
   auto state_ptr = &*F->arg_begin();
   llvm::CallInst::Create(IFT, {state_ptr}, "", B);
@@ -210,7 +211,7 @@ static InstTransResult LiftInstIntoBlockImpl(TranslationContext &ctx,
   auto &inst = ctx.natI->get_inst();
 
   if (auto lifter = ArchGetInstructionLifter(inst)) {
-    itr = ArchLiftInstruction(ctx, block, lifter);
+    itr = architecture_module->liftInstruction(ctx, block, lifter);
 
     if (TranslateError == itr || TranslateErrorUnsupported == itr) {
       std::cerr << "Error translating instruction at " << std::hex
@@ -332,7 +333,7 @@ static bool InsertFunctionIntoModule(NativeModulePtr mod,
   }
 
   auto entryBlock = llvm::BasicBlock::Create(F->getContext(), "entry", F);
-  ArchAllocRegisterVars(entryBlock);
+  architecture_module->allocateRegisterVariables(entryBlock);
 
   TranslationContext ctx;
   ctx.natM = mod;

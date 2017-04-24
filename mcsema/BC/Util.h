@@ -37,6 +37,7 @@
 #include "mcsema/Arch/Register.h"
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/CFG/CFG.h"
+#include "mcsema/Globals.h"
 
 namespace llvm {
 
@@ -291,7 +292,7 @@ template <char const *fname>
 static InstTransResult EXTERNAL_BITCODE_HELPER(TranslationContext &ctx, llvm::BasicBlock *&block) {
   auto F = ctx.F;
   auto M = F->getParent();
-  auto externSemanticsF = ArchGetOrCreateSemantics(M, fname);
+  auto externSemanticsF = architecture_module->processSemantics(M, fname);
   // we are calling a translation function, it gets the same args
   // as our function
   std::vector<llvm::Value *> subArgs;

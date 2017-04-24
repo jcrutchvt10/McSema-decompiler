@@ -1,34 +1,31 @@
+#include "MipsModule.h"
 #include <mcsema/mips/interface.h>
-#include <llvm/Support/TargetSelect.h>
-
-MCSEMA_PRIVATE_SYMBOL void InitializeMipsLLVMComponents() noexcept {
-  LLVMInitializeMipsTargetInfo();
-  LLVMInitializeMipsTargetMC();
-  LLVMInitializeMipsAsmParser();
-  LLVMInitializeMipsDisassembler();
-}
-
-MCSEMA_PRIVATE_SYMBOL void InitializeRegisterState(llvm::LLVMContext *context) noexcept {
-}
-
-MCSEMA_PRIVATE_SYMBOL void InitializeInstructionDispatchTable(DispatchMap &dispatcher) noexcept {
-}
+#include <iostream>
 
 namespace mcsema
 {
 namespace mips
 {
 
-MCSEMA_PUBLIC_SYMBOL MCSemaModuleInterface GetInterface() noexcept {
-  MCSemaTranslationInterface translation_interface = { };
+MCSEMA_PUBLIC_SYMBOL void GetSupportedArchitectures(std::list<std::string> &supported_architectures) noexcept {
+  supported_architectures = {
+    "mips32",
+    "mips64"
+  };
+}
 
-  MCSemaModuleInterface module_interface;
-  module_interface.translation = translation_interface;
-  module_interface.initializeLLVMComponents = InitializeMipsLLVMComponents;
-  module_interface.initializeRegisterState = InitializeRegisterState;
-  module_interface.initializeInstructionDispatchTable = InitializeInstructionDispatchTable;
-
-  return module_interface;
+MCSEMA_PUBLIC_SYMBOL IMCSemaModule *CreateModule(const std::string &architecture_name) noexcept {
+  try {
+    if (architecture_name == "mips32")
+      return new MipsModule(MipsModule::Bitness::x32);
+    else if (architecture_name == "mips64")
+      return new MipsModule(MipsModule::Bitness::x64);
+    else
+      return nullptr;
+  } catch (const std::exception &exception) {
+    std::cerr << "An exception has occurred: " << exception.what() << std::endl;
+    return nullptr;
+  }
 }
 
 }
