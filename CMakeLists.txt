@@ -71,10 +71,10 @@ configure_file("mcsema/Version.h.in" "${CMAKE_BINARY_DIR}/mcsema_version.h")
 
 # this function can't be told where to store the output files! we have to add the whole binary directory
 # to the include directories (or change it and lose compatibility with the system libraries)
-protobuf_generate_cpp(PROJECT_PROTOBUFSOURCEFILES PROJECT_PROTOBUFHEADERFILES "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/CFG/CFG.proto")
-list(APPEND PROJECT_INCLUDEDIRECTORIES ${CMAKE_CURRENT_BINARY_DIR})
+protobuf_generate_cpp(PROJECT_PROTOBUFSOURCEFILES PROJECT_PROTOBUFHEADERFILES "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+list(APPEND PROJECT_INCLUDEDIRECTORIES ${CMAKE_BINARY_DIR})
 
-protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.proto")
 add_custom_target(protobuf_python_module DEPENDS ${PROJECT_PROTOBUFPYTHONMODULE})
 
 #
@@ -85,7 +85,7 @@ include(LLVMUtils)
 
 # get the submodules; this is going to add source files inside PROJECT_SOURCEFILES
 message(STATUS "Scanning for architecture modules...")
-file(GLOB architecture_modules LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/mcsema/Arch/*")
+file(GLOB architecture_modules LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/mcsema/Arch/*")
 
 foreach(module_path ${architecture_modules})
     if (NOT IS_DIRECTORY ${module_path})
@@ -97,18 +97,22 @@ foreach(module_path ${architecture_modules})
     endif ()
 
     get_filename_component(module_name "${module_path}" NAME)
-    message(STATUS "Found new architecture module: ${module_name}")
-
     add_subdirectory("${module_path}")
-    list(APPEND PROJECT_SOURCEFILES ${MODULE_${module_name}_SOURCEFILES})
-    list(APPEND PROJECT_INCLUDEDIRECTORIES ${MODULE_${module_name}_INCLUDEDIRECTORIES})
+
+    if (DEFINED MODULE_${module_name}_SOURCEFILES)
+        message(STATUS " > ${module_name} (old style)")
+
+        list(APPEND PROJECT_SOURCEFILES ${MODULE_${module_name}_SOURCEFILES})
+        list(APPEND PROJECT_INCLUDEDIRECTORIES ${MODULE_${module_name}_INCLUDEDIRECTORIES})
+    else ()
+        message(STATUS " > ${module_name} (new style)")
+
+        string(TOLOWER "mcsema-${module_name}" module_target)
+        list(APPEND PROJECT_LIBRARIES ${module_target})
+    endif ()
 endforeach ()
 
 set(PROJECT_INCLUDEDIRECTORIES
-    ${MCSEMA_LLVM_DIR}
-    ${MCSEMA_LLVM_DIR}/include
-    ${MCSEMA_LLVM_DIR}/lib/Target/X86/
-
     ${CMAKE_BINARY_DIR}
 
     ${CMAKE_SOURCE_DIR}
@@ -141,10 +145,11 @@ set(PROJECT_SOURCEFILES
 )
 
 add_executable(mcsema-lift ${PROJECT_SOURCEFILES})
-target_link_libraries(mcsema-lift PRIVATE ${PROJECT_LIBRARIES})
+target_link_libraries(mcsema-lift PRIVATE ${PROJECT_LIBRARIES} "mcsema-mips")
 target_include_directories(mcsema-lift SYSTEM PRIVATE ${PROJECT_SYSTEMINCLUDEDIRECTORIES})
 target_include_directories(mcsema-lift PRIVATE ${PROJECT_INCLUDEDIRECTORIES})
 target_compile_definitions(mcsema-lift PRIVATE ${PROJECT_DEFINITIONS})
+set_target_properties(mcsema-lift PROPERTIES COMPILE_FLAGS ${GLOBAL_CXXFLAGS})
 
 # make sure the python module is generated
 add_dependencies(mcsema-lift protobuf_python_module)

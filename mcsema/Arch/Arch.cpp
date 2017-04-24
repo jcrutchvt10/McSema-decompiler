@@ -26,6 +26,8 @@
 
 #include "mcsema/cfgToLLVM/TransExcn.h"
 
+#include <mcsema/mips_module.h>
+
 namespace {
 
 static std::string gDataLayout;
@@ -179,10 +181,7 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
   LLVMInitializeX86AsmParser();
   LLVMInitializeX86Disassembler();
 
-  LLVMInitializeMipsTargetInfo();
-  LLVMInitializeMipsTargetMC();
-  LLVMInitializeMipsAsmParser();
-  LLVMInitializeMipsDisassembler();
+  mcsema::InitializeMipsLLVMComponents();
 
   if (arch == "x86" || arch == "amd64") {
     X86InitRegisterState(context);
