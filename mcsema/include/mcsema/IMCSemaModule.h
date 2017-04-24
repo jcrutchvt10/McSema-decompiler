@@ -17,18 +17,11 @@ public:
   //
 
   virtual std::string getRegisterName(MCSemaRegs id) const noexcept = 0;
-  virtual MCSemaRegs getRegisterId(const std::string &name) const noexcept = 0;
-  virtual MCSemaRegs getRegisterParent(MCSemaRegs id) const noexcept = 0;
-
   virtual llvm::StructType *getRegisterStateStructureType() const noexcept = 0;
   virtual void allocateRegisterVariables(llvm::BasicBlock *basic_block) const noexcept = 0;
-
-  virtual std::uint32_t getRegisterOffset(MCSemaRegs id) const noexcept = 0;
   virtual std::size_t getRegisterSize(MCSemaRegs id) const noexcept = 0;
-
   virtual InstTransResult liftInstruction(TranslationContext &context, llvm::BasicBlock *&basic_block, InstructionLifter *lifter) const noexcept = 0;
   virtual llvm::Function *processSemantics(llvm::Module *module, const std::string &unknown) const noexcept = 0;
-
   virtual llvm::Function *createRegisterStateTracer(llvm::Module *module) const noexcept = 0;
 
   //

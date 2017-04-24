@@ -357,7 +357,7 @@ llvm::StructType *X86RegStateStructType(void) {
   return gRegStateStruct;
 }
 
-static llvm::Constant *GetPrintf(llvm::Module *M) {
+llvm::Constant *GetPrintf(llvm::Module *M) {
   // ; Function Attrs: nounwind
   // declare i32 @printf(i8* nocapture readonly, ...) local_unnamed_addr #1
   auto &C = M->getContext();

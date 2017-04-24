@@ -18,23 +18,11 @@ std::string MipsModule::getRegisterName(MCSemaRegs id) const noexcept {
   return "";
 }
 
-MCSemaRegs MipsModule::getRegisterId(const std::string &name) const noexcept {
-  return 0;
-}
-
-MCSemaRegs MipsModule::getRegisterParent(MCSemaRegs id) const noexcept {
-  return 0;
-}
-
 llvm::StructType *MipsModule::getRegisterStateStructureType() const noexcept {
   return nullptr;
 }
 
 void MipsModule::allocateRegisterVariables(llvm::BasicBlock *basic_block) const noexcept {
-}
-
-std::uint32_t MipsModule::getRegisterOffset(MCSemaRegs id) const noexcept {
-  return 0;
 }
 
 std::size_t MipsModule::getRegisterSize(MCSemaRegs id) const noexcept {

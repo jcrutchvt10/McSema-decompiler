@@ -20,11 +20,8 @@ public:
 
   // IMCSemaModule interface
   virtual std::string getRegisterName(MCSemaRegs id) const noexcept override;
-  virtual MCSemaRegs getRegisterId(const std::string &name) const noexcept override;
-  virtual MCSemaRegs getRegisterParent(MCSemaRegs id) const noexcept override;
   virtual llvm::StructType *getRegisterStateStructureType() const noexcept override;
   virtual void allocateRegisterVariables(llvm::BasicBlock *basic_block) const noexcept override;
-  virtual std::uint32_t getRegisterOffset(MCSemaRegs id) const noexcept override;
   virtual std::size_t getRegisterSize(MCSemaRegs id) const noexcept override;
   virtual InstTransResult liftInstruction(TranslationContext &context, llvm::BasicBlock *&basic_block, InstructionLifter *lifter) const noexcept override;
   virtual llvm::Function *processSemantics(llvm::Module *module, const std::string &unknown) const noexcept override;

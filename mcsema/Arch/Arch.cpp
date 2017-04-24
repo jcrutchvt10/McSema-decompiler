@@ -97,24 +97,12 @@ public:
     return X86RegisterName(id);
   }
 
-  virtual MCSemaRegs getRegisterId(const std::string &name) const noexcept override {
-    return X86RegisterNumber(name);
-  }
-
-  virtual MCSemaRegs getRegisterParent(MCSemaRegs id) const noexcept override {
-    return X86RegisterParent(id);
-  }
-
   virtual llvm::StructType *getRegisterStateStructureType() const noexcept override {
     return X86RegStateStructType();
   }
 
   virtual void allocateRegisterVariables(llvm::BasicBlock *basic_block) const noexcept override {
     X86AllocRegisterVars(basic_block);
-  }
-
-  virtual std::uint32_t getRegisterOffset(MCSemaRegs id) const noexcept override {
-    return X86RegisterOffset(id);
   }
 
   virtual std::size_t getRegisterSize(MCSemaRegs id) const noexcept override {

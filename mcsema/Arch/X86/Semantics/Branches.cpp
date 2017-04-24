@@ -54,6 +54,7 @@
 #include "mcsema/CFG/Externals.h"
 #include "mcsema/BC/Util.h"
 #include "mcsema/cfgToLLVM/JumpTables.h"
+#include "../Register.h"
 
 template<int width>
 static InstTransResult doLRet(llvm::BasicBlock *b) {
@@ -543,8 +544,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
       auto T = it->getType();
       llvm::Value *arg1 = nullptr;
       if (T->isDoubleTy()) {
-        //int k = architecture_module->getRegisterOffset(llvm::X86::XMM0);
-        int k = architecture_module->getRegisterOffset(llvm::X86::XMM0);
+        int k = X86RegisterOffset(llvm::X86::XMM0);
         llvm::Value *arg1FieldGEPV[] = {CONST_V<64>(b, 0), CONST_V<32>(b, k)};
 
         auto GEP_128 = llvm::GetElementPtrInst::CreateInBounds(
@@ -569,7 +569,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
       auto T = it->getType();
       llvm::Value *arg2 = nullptr;
       if (T->isDoubleTy()) {
-        int k = architecture_module->getRegisterOffset(llvm::X86::XMM1);
+        int k = X86RegisterOffset(llvm::X86::XMM1);
         llvm::Value *arg2FieldGEPV[] = {CONST_V<64>(b, 0), CONST_V<32>(b, k)};
 
         auto GEP_128 = llvm::GetElementPtrInst::CreateInBounds(
@@ -592,7 +592,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
       auto T = it->getType();
       llvm::Value *arg3 = nullptr;
       if (T->isDoubleTy()) {
-        int k = architecture_module->getRegisterOffset(llvm::X86::XMM2);
+        int k = X86RegisterOffset(llvm::X86::XMM2);
         llvm::Value *arg3FieldGEPV[] = {CONST_V<64>(b, 0), CONST_V<32>(b, k)};
 
         auto GEP_128 = llvm::GetElementPtrInst::CreateInBounds(
@@ -615,7 +615,7 @@ static InstTransResult doCallPCExtern(llvm::BasicBlock *&b, std::string target,
       auto T = it->getType();
       llvm::Value *arg4 = nullptr;
       if (T->isDoubleTy()) {
-        int k = architecture_module->getRegisterOffset(llvm::X86::XMM3);
+        int k = X86RegisterOffset(llvm::X86::XMM3);
         llvm::Value *arg4FieldGEPV[] = {CONST_V<64>(b, 0), CONST_V<32>(b, k)};
 
         auto GEP_128 = llvm::GetElementPtrInst::CreateInBounds(
