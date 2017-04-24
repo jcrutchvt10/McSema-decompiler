@@ -13,10 +13,17 @@ include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
 # llvm
 find_package(LLVM REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
 
-llvm_map_components_to_libnames(LLVM_LIBRARIES
-    asmparser mcparser mipsasmparser x86asmparser mipsdesc x86desc mcdisassembler mipsdisassembler x86disassembler
-    bitreader bitwriter
-)
+if (${LLVM_PACKAGE_VERSION} VERSION_LESS "3.9.0")
+    set(LLVM_LIBRARIES 
+        LLVMAsmParser LLVMMCParser LLVMMipsAsmParser LLVMX86AsmParser LLVMX86Desc LLVMMipsDesc LLVMMCDisassembler LLVMMipsDisassembler LLVMX86Disassembler
+        LLVMBitReader LLVMBitWriter
+    )
+else ()
+    llvm_map_components_to_libnames(LLVM_LIBRARIES
+        asmparser mcparser mipsasmparser x86asmparser mipsdesc x86desc mcdisassembler mipsdisassembler x86disassembler
+        bitreader bitwriter
+    )
+endif ()
 
 list(APPEND PROJECT_LIBRARIES ${LLVM_LIBRARIES})
 list(APPEND PROJECT_DEFINITIONS ${LLVM_DEFINITIONS})
@@ -25,8 +32,13 @@ list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES ${LLVM_INCLUDE_DIRS})
 string(REPLACE "." "" MCSEMA_LLVMVERSION ${LLVM_PACKAGE_VERSION})
 list(APPEND PROJECT_DEFINITIONS "MCSEMA_LLVMVERSION=${MCSEMA_LLVMVERSION}")
 
-list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${CMAKE_SOURCE_DIR}/LLVMPrivateHeaders/${MCSEMA_LLVMVERSION}")
-list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${CMAKE_SOURCE_DIR}/LLVMPrivateHeaders/${MCSEMA_LLVMVERSION}/llvm/lib/Target/X86")
+set(LLVM_PRIVATE_HEADERS_BASE_PATH "${CMAKE_SOURCE_DIR}/LLVMPrivateHeaders/${MCSEMA_LLVMVERSION}")
+if (NOT IS_DIRECTORY ${LLVM_PRIVATE_HEADERS_BASE_PATH})
+    message(FATAL_ERROR "The following LLVM version is not supported: ${LLVM_PACKAGE_VERSION}")
+endif ()
+
+list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${LLVM_PRIVATE_HEADERS_BASE_PATH}")
+list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${LLVM_PRIVATE_HEADERS_BASE_PATH}/llvm/lib/Target/X86")
 
 # protobuf
 find_package(Protobuf REQUIRED)
