@@ -26,7 +26,8 @@
 
 #include "mcsema/cfgToLLVM/TransExcn.h"
 
-#include <mcsema/mips_module.h>
+#include <mcsema/module_interface.h>
+#include <mcsema/mips/interface.h>
 
 namespace {
 
@@ -145,6 +146,9 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
       gAddressSize = 64;
       gTriple = "x86_64-pc-win32";
       gDataLayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
+    } else if (arch == "mips") {
+      /// \todo
+      return true;
     } else {
       return false;
     }
@@ -170,20 +174,19 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
       gDataLayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
 
     } else {
-      return false;
+      /// \todo
+      return true;
     }
   } else {
     return false;
   }
 
-  LLVMInitializeX86TargetInfo();
-  LLVMInitializeX86TargetMC();
-  LLVMInitializeX86AsmParser();
-  LLVMInitializeX86Disassembler();
-
-  mcsema::InitializeMipsLLVMComponents();
-
   if (arch == "x86" || arch == "amd64") {
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeX86AsmParser();
+    LLVMInitializeX86Disassembler();
+
     X86InitRegisterState(context);
     X86InitInstructionDispatch(gDispatcher);
     ArchRegisterName = X86RegisterName;
@@ -197,7 +200,23 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
     ArchGetOrCreateSemantics = X86GetOrCreateSemantics;
     ArchLiftInstruction = X86LiftInstruction;
   } else if (arch == "mips") {
-    return false;
+    MCSemaModuleInterface module_interface = mcsema::mips::GetInterface();
+
+    ArchRegisterName = module_interface.translation.registerName;
+    ArchRegisterNumber = module_interface.translation.registerNumber;
+    ArchRegisterOffset = module_interface.translation.registerOffset;
+    ArchRegisterParent = module_interface.translation.registerParent;
+    ArchRegisterSize = module_interface.translation.registerSize;
+    ArchAllocRegisterVars = module_interface.translation.allocateRegisterVariables;
+    ArchRegStateStructType = module_interface.translation.registerStateStructureType;
+    ArchGetOrCreateRegStateTracer = module_interface.translation.createRegisterStateTracer;
+    ArchGetOrCreateSemantics = module_interface.translation.createSemantics;
+    ArchLiftInstruction = module_interface.translation.liftInstruction;
+
+    module_interface.initializeLLVMComponents();
+    module_interface.initializeRegisterState(context);
+    module_interface.initializeInstructionDispatchTable(gDispatcher);
+
   } else {
     return false;
   }

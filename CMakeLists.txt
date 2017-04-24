@@ -123,6 +123,9 @@ set(PROJECT_INCLUDEDIRECTORIES
     ${CMAKE_SOURCE_DIR}/mcsema/peToCFG
     ${CMAKE_SOURCE_DIR}/mcsema/cfgToLLVM
     ${CMAKE_SOURCE_DIR}/third_party
+
+    # public include headers
+    ${CMAKE_SOURCE_DIR}/mcsema/include
 )
 
 set(PROJECT_SOURCEFILES
