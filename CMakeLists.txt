@@ -11,7 +11,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
 #
 
 # llvm
-find_package(LLVM REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
+find_package(LLVM ${FORCE_LLVM_VERSION} REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
 
 if (${LLVM_PACKAGE_VERSION} VERSION_LESS "3.9.0")
     set(LLVM_LIBRARIES 
@@ -87,7 +87,6 @@ set(MCSEMA_PUBLICINCLUDEDIRECTORIES
     ${CMAKE_SOURCE_DIR}/mcsema/include
 )
 
-message(STATUS "Discovering architecture modules...")
 file(GLOB architecture_modules LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/mcsema/Arch/*")
 
 foreach(module_path ${architecture_modules})
@@ -102,17 +101,39 @@ foreach(module_path ${architecture_modules})
     get_filename_component(module_name "${module_path}" NAME)
     add_subdirectory("${module_path}")
 
-    message(STATUS " > ${module_name}")
+    message("Found new architecture module: ${module_name}")
 
     string(TOLOWER "mcsema-${module_name}" module_target)
     list(APPEND PROJECT_LIBRARIES ${module_target})
 endforeach ()
 
 #
-# target settings
+# get the runtime modules
 #
 
+# this is needed by the runtime modules to generate bitcode
 include(LLVMUtils)
+
+file(GLOB runtime_modules LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/mcsema/Runtime/*")
+
+foreach(runtime_path ${runtime_modules})
+    if (NOT IS_DIRECTORY ${runtime_path})
+        continue ()
+    endif ()
+
+    if (NOT EXISTS ${runtime_path}/CMakeLists.txt)
+        continue ()
+    endif ()
+
+    get_filename_component(runtime_name "${runtime_path}" NAME)
+    add_subdirectory("${runtime_path}")
+
+    message("Found new runtime module: ${runtime_name}")
+endforeach ()
+
+#
+# target settings
+#
 
 set(PROJECT_INCLUDEDIRECTORIES
     ${CMAKE_BINARY_DIR}

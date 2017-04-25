@@ -4,4 +4,4 @@
 #include <memory>
 
 extern std::unique_ptr<IMCSemaModule> architecture_module;
-
+extern const llvm::MCDisassembler *gDisassembler;

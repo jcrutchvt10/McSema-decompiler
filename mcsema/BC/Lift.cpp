@@ -30,6 +30,10 @@
 
 #if MCSEMA_LLVMVERSION >= 400
   #include <llvm/Bitcode/BitcodeReader.h>
+
+#elif MCSEMA_LLVMVERSION == 391
+  #include <llvm/Bitcode/ReaderWriter.h>
+
 #else
   #include <llvm/Bitcode/Reader.h>
 #endif

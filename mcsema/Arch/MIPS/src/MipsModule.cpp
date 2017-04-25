@@ -60,6 +60,10 @@ NativeInst::Prefix MipsModule::getInstructionPrefix(const llvm::MCInst &inst) co
   return { };
 }
 
-NativeInstPtr MipsModule::decodeInstruction(uintptr_t virtual_address, const std::vector<uint8_t> &buffer) const noexcept {
+NativeInstPtr MipsModule::decodeInstruction(const llvm::MCDisassembler *llvm_disassembler, uintptr_t virtual_address, const std::vector<uint8_t> &buffer) const noexcept {
   return nullptr;
+}
+
+bool MipsModule::initializeArchitecture(ArchitectureInformation &architecture_information, llvm::LLVMContext *context, const std::string &operating_system, const std::string &architecture_name) const noexcept {
+  return true;
 }

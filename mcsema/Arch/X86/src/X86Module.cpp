@@ -25,9 +25,12 @@
 #include <llvm/Support/TargetSelect.h>
 
 struct X86Module::PrivateData final {
+  int address_size;
 };
 
-X86Module::X86Module() : d(new PrivateData) {
+X86Module::X86Module(int address_size) : d(new PrivateData) {
+  d->address_size = address_size;
+
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
   LLVMInitializeX86AsmParser();
@@ -169,7 +172,7 @@ NativeInst::Prefix X86Module::getInstructionPrefix(const llvm::MCInst &inst) con
   return NativeInst::NoPrefix;
 }
 
-NativeInstPtr X86Module::decodeInstruction(uintptr_t virtual_address, const std::vector<uint8_t> &buffer) const noexcept {
+NativeInstPtr X86Module::decodeInstruction(const llvm::MCDisassembler *llvm_disassembler, uintptr_t virtual_address, const std::vector<uint8_t> &buffer) const noexcept {
   const std::size_t kMaxNumInstrBytes = 16;
 
   VA nextVA = virtual_address;
@@ -180,8 +183,7 @@ NativeInstPtr X86Module::decodeInstruction(uintptr_t virtual_address, const std:
 
   // Try to decode the instruction.
   llvm::MCInst mcInst;
-  auto num_decoded_bytes = ArchDecodeInstruction(
-      decodable_bytes, decodable_bytes + max_size, virtual_address, mcInst);
+  auto num_decoded_bytes = instructionDecoderHelper(llvm_disassembler, decodable_bytes, decodable_bytes + max_size, virtual_address, mcInst);
 
   if (!num_decoded_bytes) {
     std::cerr
@@ -275,3 +277,178 @@ NativeInstPtr X86Module::decodeInstruction(uintptr_t virtual_address, const std:
 
   return inst;
 }
+
+bool X86Module::initializeArchitecture(ArchitectureInformation &architecture_information, llvm::LLVMContext *context, const std::string &operating_system, const std::string &architecture_name) const noexcept {
+  if (operating_system != "win32" && operating_system != "linux")
+    return false;
+
+  if (architecture_name != "x86" && architecture_name != "amd64")
+    return false;
+
+  //
+  // windows
+  //
+
+  if (operating_system == "win32") {
+    architecture_information.operating_system_type = llvm::Triple::Win32;
+
+    if (architecture_name == "x86") {
+      architecture_information.architecture_type = llvm::Triple::x86;
+      architecture_information.calling_convention = llvm::CallingConv::C;
+      architecture_information.address_size = 32;
+      architecture_information.llvm_triple = "i686-pc-win32";
+      architecture_information.llvm_data_layout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:"
+          "32:32-f64:64:64-f80:128:128-v64:64:64-v128:128:128-a0:0:64-f80:"
+          "32:32-n8:16:32-S32";
+
+    } else if (architecture_name == "amd64") {
+      architecture_information.architecture_type = llvm::Triple::x86_64;
+      architecture_information.calling_convention = llvm::CallingConv::X86_64_Win64;
+      architecture_information.address_size = 64;
+      architecture_information.llvm_triple = "x86_64-pc-win32";
+      architecture_information.llvm_data_layout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
+    }
+
+  //
+  // linux
+  //
+
+  } else if (operating_system == "linux") {
+    architecture_information.operating_system_type = llvm::Triple::Linux;
+
+    if (architecture_name == "x86") {
+      architecture_information.architecture_type = llvm::Triple::x86;
+      architecture_information.calling_convention = llvm::CallingConv::C;
+      architecture_information.address_size = 32;
+      architecture_information.llvm_triple = "i686-pc-linux-gnu";
+      architecture_information.llvm_data_layout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:"
+          "32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:32:32-n8:"
+          "16:32-S128";
+
+    } else if (architecture_name == "amd64") {
+      architecture_information.architecture_type = llvm::Triple::x86_64;
+      architecture_information.calling_convention = llvm::CallingConv::X86_64_SysV;
+      architecture_information.address_size = 64;
+      architecture_information.llvm_triple = "x86_64-pc-linux-gnu";
+      architecture_information.llvm_data_layout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
+
+    }
+  }
+
+  return true;
+}
+
+std::size_t X86Module::instructionDecoderHelper(const llvm::MCDisassembler *llvm_disassembler, const uint8_t *bytes, const uint8_t *bytes_end,
+                             uintptr_t va, llvm::MCInst &inst) const noexcept {
+
+
+  size_t total_size = 0;
+  size_t max_size = static_cast<size_t>(bytes_end - bytes);
+
+  std::unordered_set<unsigned> prefixes;
+
+  for (; total_size < max_size; ) {
+    llvm::ArrayRef<uint8_t> bytes_to_decode(
+        &(bytes[total_size]), max_size - total_size);
+
+    uint64_t size = 0;
+    auto decode_status = llvm_disassembler->getInstruction(
+        inst, size, bytes_to_decode, va, llvm::nulls(), llvm::nulls());
+
+    if (llvm::MCDisassembler::Success != decode_status) {
+      return 0;
+    }
+
+    total_size += size;
+
+    switch (auto op_code = inst.getOpcode()) {
+      case llvm::X86::CS_PREFIX:
+      case llvm::X86::DATA16_PREFIX:
+      case llvm::X86::DS_PREFIX:
+      case llvm::X86::ES_PREFIX:
+      case llvm::X86::FS_PREFIX:
+      case llvm::X86::GS_PREFIX:
+      case llvm::X86::LOCK_PREFIX:
+      case llvm::X86::REPNE_PREFIX:
+      case llvm::X86::REP_PREFIX:
+      case llvm::X86::REX64_PREFIX:
+      case llvm::X86::SS_PREFIX:
+      case llvm::X86::XACQUIRE_PREFIX:
+      case llvm::X86::XRELEASE_PREFIX:
+        prefixes.insert(op_code);
+        break;
+      default:
+        max_size = 0;  // Stop decoding.
+        break;
+    }
+  }
+
+  combineInstructions(inst, prefixes);
+
+  return total_size;
+}
+
+void X86Module::combineInstructions(llvm::MCInst &inst, const std::unordered_set<unsigned> &prefixes) const noexcept {
+  static const unsigned fixups[][4] = {
+    {llvm::X86::MOVSB, llvm::X86::REP_PREFIX,
+        llvm::X86::REP_MOVSB_32, llvm::X86::REP_MOVSB_64},
+    {llvm::X86::MOVSW, llvm::X86::REP_PREFIX, llvm::X86::REP_MOVSW_32,
+        llvm::X86::REP_MOVSW_64},
+    {llvm::X86::MOVSL, llvm::X86::REP_PREFIX, llvm::X86::REP_MOVSD_32,
+        llvm::X86::REP_MOVSD_64},
+    {llvm::X86::MOVSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REP_MOVSQ_64},
+    {llvm::X86::LODSB, llvm::X86::REP_PREFIX, llvm::X86::REP_LODSB_32,
+        llvm::X86::REP_LODSB_64},
+    {llvm::X86::LODSW, llvm::X86::REP_PREFIX, llvm::X86::REP_LODSW_32,
+        llvm::X86::REP_LODSW_64},
+    {llvm::X86::LODSL, llvm::X86::REP_PREFIX, llvm::X86::REP_LODSD_32,
+        llvm::X86::REP_LODSD_64},
+    {llvm::X86::LODSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REP_LODSQ_64},
+    {llvm::X86::STOSB, llvm::X86::REP_PREFIX, llvm::X86::REP_STOSB_32,
+        llvm::X86::REP_STOSB_64},
+    {llvm::X86::STOSW, llvm::X86::REP_PREFIX, llvm::X86::REP_STOSW_32,
+        llvm::X86::REP_STOSW_64},
+    {llvm::X86::STOSL, llvm::X86::REP_PREFIX, llvm::X86::REP_STOSD_32,
+        llvm::X86::REP_STOSD_64},
+    {llvm::X86::STOSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REP_STOSQ_64},
+    {llvm::X86::CMPSB, llvm::X86::REP_PREFIX, llvm::X86::REPE_CMPSB_32,
+        llvm::X86::REPE_CMPSB_64},
+    {llvm::X86::CMPSW, llvm::X86::REP_PREFIX, llvm::X86::REPE_CMPSW_32,
+        llvm::X86::REPE_CMPSW_64},
+    {llvm::X86::CMPSL, llvm::X86::REP_PREFIX, llvm::X86::REPE_CMPSD_32,
+        llvm::X86::REPE_CMPSD_64},
+    {llvm::X86::CMPSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REPE_CMPSQ_64},
+    {llvm::X86::CMPSB, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_CMPSB_32,
+        llvm::X86::REPNE_CMPSB_64},
+    {llvm::X86::CMPSW, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_CMPSW_32,
+        llvm::X86::REPNE_CMPSW_64},
+    {llvm::X86::CMPSL, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_CMPSD_32,
+        llvm::X86::REPNE_CMPSD_64},
+    {llvm::X86::CMPSQ, llvm::X86::REPNE_PREFIX, 0, llvm::X86::REPNE_CMPSQ_64},
+    {llvm::X86::SCASB, llvm::X86::REP_PREFIX, llvm::X86::REPE_SCASB_32,
+        llvm::X86::REPE_SCASB_64},
+    {llvm::X86::SCASW, llvm::X86::REP_PREFIX, llvm::X86::REPE_SCASW_32,
+        llvm::X86::REPE_SCASW_64},
+    {llvm::X86::SCASL, llvm::X86::REP_PREFIX, llvm::X86::REPE_SCASD_32,
+        llvm::X86::REPE_SCASD_64},
+    {llvm::X86::SCASQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REPE_SCASQ_64},
+    {llvm::X86::SCASB, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_SCASB_32,
+        llvm::X86::REPNE_SCASB_64},
+    {llvm::X86::SCASW, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_SCASW_32,
+        llvm::X86::REPNE_SCASW_64},
+    {llvm::X86::SCASL, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_SCASD_32,
+        llvm::X86::REPNE_SCASD_64},
+    {llvm::X86::SCASQ, llvm::X86::REPNE_PREFIX, 0, llvm::X86::REPNE_SCASQ_64}
+  };
+
+  for (const auto &fixup : fixups) {
+    if (inst.getOpcode() == fixup[0] && prefixes.count(fixup[1])) {
+      if (32 == d->address_size) {
+        inst.setOpcode(fixup[2]);
+      } else {
+        inst.setOpcode(fixup[3]);
+      }
+    }
+  }
+}
+

@@ -6,7 +6,7 @@
 
 #include <llvm/MC/MCContext.h>
 
-#if MCSEMA_LLVMVERSION >= 400
+#if MCSEMA_LLVMVERSION >= 391
   #include <llvm/MC/Disassembler.h>
 #else
   #include <llvm/MC/MCDisassembler.h>
@@ -37,15 +37,13 @@ static std::string gTriple;
 
 static int gAddressSize = 0;
 
-static const llvm::MCDisassembler *gDisassembler = nullptr;
-
 static llvm::CallingConv::ID gCallingConv;
 static llvm::Triple::ArchType gArchType;
 static llvm::Triple::OSType gOSType;
 
 static DispatchMap gDispatcher;
 
-static bool InitInstructionDecoder(void) {
+static bool InitInstructionDecoder() {
   std::string errstr;
   auto target = llvm::TargetRegistry::lookupTarget(gTriple, errstr);
   if (!target) {
@@ -100,67 +98,33 @@ bool ListArchSupportedInstructions(const std::string &triple, llvm::raw_ostream 
 
 bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::string &arch) {
 
-  // Windows.
-  if (os == "win32") {
-    gOSType = llvm::Triple::Win32;
-    if (arch == "x86") {
-      gArchType = llvm::Triple::x86;
-      gCallingConv = llvm::CallingConv::C;
-      gAddressSize = 32;
-      gTriple = "i686-pc-win32";
-      gDataLayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:"
-          "32:32-f64:64:64-f80:128:128-v64:64:64-v128:128:128-a0:0:64-f80:"
-          "32:32-n8:16:32-S32";
+  /// \todo use mcsema::x86/mips::GetSupportedArchitectures();
+  /// \todo register modules at runtime and load them with dlopen
 
-    } else if (arch == "amd64") {
-      gArchType = llvm::Triple::x86_64;
-      gCallingConv = llvm::CallingConv::X86_64_Win64;
-      gAddressSize = 64;
-      gTriple = "x86_64-pc-win32";
-      gDataLayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
-    } else if (arch == "mips") {
-      /// \todo
-      return true;
-    } else {
-      return false;
-    }
-
-
-  // Linux.
-  } else if (os == "linux") {
-    gOSType = llvm::Triple::Linux;
-    if (arch == "x86") {
-      gArchType = llvm::Triple::x86;
-      gCallingConv = llvm::CallingConv::C;
-      gAddressSize = 32;
-      gTriple = "i686-pc-linux-gnu";
-      gDataLayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:"
-          "32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:32:32-n8:"
-          "16:32-S128";
-
-    } else if (arch == "amd64") {
-      gArchType = llvm::Triple::x86_64;
-      gCallingConv = llvm::CallingConv::X86_64_SysV;
-      gAddressSize = 64;
-      gTriple = "x86_64-pc-linux-gnu";
-      gDataLayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128";
-
-    } else {
-      /// \todo
-      return true;
-    }
-  } else {
-    return false;
-  }
-
+  IMCSemaModule *ptr = mcsema::x86::CreateModule(arch);
+  std::cout << std::hex << ptr << std::endl;
   if (arch == "x86" || arch == "amd64") {
     architecture_module = std::unique_ptr<IMCSemaModule>(mcsema::x86::CreateModule(arch));
   } else if (arch == "mips32" || arch == "mips64") {
     architecture_module = std::unique_ptr<IMCSemaModule>(mcsema::mips::CreateModule(arch));
   } else {
-    std::cerr << "Invalid architecture" << std::endl;
+    std::cerr << "Unsupported architecture" << std::endl;
     return false;
   }
+
+  architecture_module->initializeRegisterState(context);
+  architecture_module->initializeInstructionDispatchTable(gDispatcher);
+
+  ArchitectureInformation arch_info;
+  if (!architecture_module->initializeArchitecture(arch_info, context, os, arch))
+    return false;
+
+  gOSType = arch_info.operating_system_type;
+  gTriple = arch_info.llvm_triple;
+  gDataLayout = arch_info.llvm_data_layout;
+  gArchType = arch_info.architecture_type;
+  gCallingConv = arch_info.calling_convention;
+  gAddressSize = arch_info.address_size;
 
   return InitInstructionDecoder();
 }
@@ -179,127 +143,6 @@ const std::string &ArchTriple(void) {
 
 const std::string &ArchDataLayout(void) {
   return gDataLayout;
-}
-
-namespace {
-
-// Some instructions should be combined with their prefixes. We do this here.
-static void FixupInstruction(
-    llvm::MCInst &inst, const std::unordered_set<unsigned> &prefixes) {
-  static const unsigned fixups[][4] = {
-    {llvm::X86::MOVSB, llvm::X86::REP_PREFIX,
-        llvm::X86::REP_MOVSB_32, llvm::X86::REP_MOVSB_64},
-    {llvm::X86::MOVSW, llvm::X86::REP_PREFIX, llvm::X86::REP_MOVSW_32,
-        llvm::X86::REP_MOVSW_64},
-    {llvm::X86::MOVSL, llvm::X86::REP_PREFIX, llvm::X86::REP_MOVSD_32,
-        llvm::X86::REP_MOVSD_64},
-    {llvm::X86::MOVSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REP_MOVSQ_64},
-    {llvm::X86::LODSB, llvm::X86::REP_PREFIX, llvm::X86::REP_LODSB_32,
-        llvm::X86::REP_LODSB_64},
-    {llvm::X86::LODSW, llvm::X86::REP_PREFIX, llvm::X86::REP_LODSW_32,
-        llvm::X86::REP_LODSW_64},
-    {llvm::X86::LODSL, llvm::X86::REP_PREFIX, llvm::X86::REP_LODSD_32,
-        llvm::X86::REP_LODSD_64},
-    {llvm::X86::LODSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REP_LODSQ_64},
-    {llvm::X86::STOSB, llvm::X86::REP_PREFIX, llvm::X86::REP_STOSB_32,
-        llvm::X86::REP_STOSB_64},
-    {llvm::X86::STOSW, llvm::X86::REP_PREFIX, llvm::X86::REP_STOSW_32,
-        llvm::X86::REP_STOSW_64},
-    {llvm::X86::STOSL, llvm::X86::REP_PREFIX, llvm::X86::REP_STOSD_32,
-        llvm::X86::REP_STOSD_64},
-    {llvm::X86::STOSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REP_STOSQ_64},
-    {llvm::X86::CMPSB, llvm::X86::REP_PREFIX, llvm::X86::REPE_CMPSB_32,
-        llvm::X86::REPE_CMPSB_64},
-    {llvm::X86::CMPSW, llvm::X86::REP_PREFIX, llvm::X86::REPE_CMPSW_32,
-        llvm::X86::REPE_CMPSW_64},
-    {llvm::X86::CMPSL, llvm::X86::REP_PREFIX, llvm::X86::REPE_CMPSD_32,
-        llvm::X86::REPE_CMPSD_64},
-    {llvm::X86::CMPSQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REPE_CMPSQ_64},
-    {llvm::X86::CMPSB, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_CMPSB_32,
-        llvm::X86::REPNE_CMPSB_64},
-    {llvm::X86::CMPSW, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_CMPSW_32,
-        llvm::X86::REPNE_CMPSW_64},
-    {llvm::X86::CMPSL, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_CMPSD_32,
-        llvm::X86::REPNE_CMPSD_64},
-    {llvm::X86::CMPSQ, llvm::X86::REPNE_PREFIX, 0, llvm::X86::REPNE_CMPSQ_64},
-    {llvm::X86::SCASB, llvm::X86::REP_PREFIX, llvm::X86::REPE_SCASB_32,
-        llvm::X86::REPE_SCASB_64},
-    {llvm::X86::SCASW, llvm::X86::REP_PREFIX, llvm::X86::REPE_SCASW_32,
-        llvm::X86::REPE_SCASW_64},
-    {llvm::X86::SCASL, llvm::X86::REP_PREFIX, llvm::X86::REPE_SCASD_32,
-        llvm::X86::REPE_SCASD_64},
-    {llvm::X86::SCASQ, llvm::X86::REP_PREFIX, 0, llvm::X86::REPE_SCASQ_64},
-    {llvm::X86::SCASB, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_SCASB_32,
-        llvm::X86::REPNE_SCASB_64},
-    {llvm::X86::SCASW, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_SCASW_32,
-        llvm::X86::REPNE_SCASW_64},
-    {llvm::X86::SCASL, llvm::X86::REPNE_PREFIX, llvm::X86::REPNE_SCASD_32,
-        llvm::X86::REPNE_SCASD_64},
-    {llvm::X86::SCASQ, llvm::X86::REPNE_PREFIX, 0, llvm::X86::REPNE_SCASQ_64}
-  };
-
-  for (const auto &fixup : fixups) {
-    if (inst.getOpcode() == fixup[0] && prefixes.count(fixup[1])) {
-      if (32 == gAddressSize) {
-        inst.setOpcode(fixup[2]);
-      } else {
-        inst.setOpcode(fixup[3]);
-      }
-    }
-  }
-}
-
-}  // namespace
-
-// Decodes the instruction, and returns the number of bytes decoded.
-size_t ArchDecodeInstruction(const uint8_t *bytes, const uint8_t *bytes_end,
-                             uintptr_t va, llvm::MCInst &inst) {
-
-
-  size_t total_size = 0;
-  size_t max_size = static_cast<size_t>(bytes_end - bytes);
-
-  std::unordered_set<unsigned> prefixes;
-
-  for (; total_size < max_size; ) {
-    llvm::ArrayRef<uint8_t> bytes_to_decode(
-        &(bytes[total_size]), max_size - total_size);
-
-    uint64_t size = 0;
-    auto decode_status = gDisassembler->getInstruction(
-        inst, size, bytes_to_decode, va, llvm::nulls(), llvm::nulls());
-
-    if (llvm::MCDisassembler::Success != decode_status) {
-      return 0;
-    }
-
-    total_size += size;
-
-    switch (auto op_code = inst.getOpcode()) {
-      case llvm::X86::CS_PREFIX:
-      case llvm::X86::DATA16_PREFIX:
-      case llvm::X86::DS_PREFIX:
-      case llvm::X86::ES_PREFIX:
-      case llvm::X86::FS_PREFIX:
-      case llvm::X86::GS_PREFIX:
-      case llvm::X86::LOCK_PREFIX:
-      case llvm::X86::REPNE_PREFIX:
-      case llvm::X86::REP_PREFIX:
-      case llvm::X86::REX64_PREFIX:
-      case llvm::X86::SS_PREFIX:
-      case llvm::X86::XACQUIRE_PREFIX:
-      case llvm::X86::XRELEASE_PREFIX:
-        prefixes.insert(op_code);
-        break;
-      default:
-        max_size = 0;  // Stop decoding.
-        break;
-    }
-  }
-
-  FixupInstruction(inst, prefixes);
-
-  return total_size;
 }
 
 // Return the default calling convention for code on this architecture.

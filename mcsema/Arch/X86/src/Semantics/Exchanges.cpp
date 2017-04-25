@@ -165,7 +165,7 @@ static InstTransResult doCmpxchgRM(NativeInstPtr ip, llvm::BasicBlock *&b,
   auto srcReg_v = R_READ<width>(b, srcReg.getReg());
 
   auto cmpx = new llvm::AtomicCmpXchgInst(m_addr, acc, srcReg_v,
-#if MCSEMA_LLVMVERSION >= 400
+#if MCSEMA_LLVMVERSION >= 391
                                           llvm::AtomicOrdering::SequentiallyConsistent,
                                           llvm::AtomicOrdering::SequentiallyConsistent,
 #else

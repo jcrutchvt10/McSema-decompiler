@@ -18,7 +18,7 @@ def b64(f):
         return base64.b64encode(infile.read())
 
 class LinuxTest(unittest.TestCase):
-    """ Test translating CFGs created from Linux binaries 
+    """ Test translating CFGs created from Linux binaries
         When this test runs on Linux, it will also attempt to
         rebuild the bitcode to new, and to run the new binaries.
     """
@@ -87,6 +87,8 @@ class LinuxTest(unittest.TestCase):
 
         with open(errfile, "w") as err_devnull:
             with open(outfile, "w") as out_devnull:
+                # XXXXXXXXXXXXXXXXXXXXXX
+                sys.stderr.write("executing: {}\n".format(" ".join(procargs)))
                 if DEBUG:
                     sys.stderr.write("executing: {}\n".format(" ".join(procargs)))
                 po = subprocess.Popen(procargs, stderr=stderr or err_devnull, stdout=stdout or out_devnull)
@@ -131,17 +133,20 @@ class LinuxTest(unittest.TestCase):
             "amd64": "mcsema_semantics_amd64.bc",
             "x86": "mcsema_semantics_x86.bc", }
 
-        runtime_lib = os.path.realpath(
-            os.path.join(self.my_dir, "../", "lib", arch_lib_name[arch]))
+        runtime_lib = os.environ["MCSEMA_BUILD_FOLDER"] + "/mcsema/Runtime/X86/" + arch_lib_name[arch]
+        bitcode_lib = os.environ["MCSEMA_BUILD_FOLDER"] + "/mcsema/Runtime/X86/" + arch_bitcode_name[arch]
 
-        bitcode_lib = os.path.realpath(
-            os.path.join(self.my_dir, "../", "lib", arch_bitcode_name[arch]))
+        # XXXXXXXXXXXXXXXXXX
+        print "runtime_lib is " + runtime_lib
+        print "bitcode_lib is " + bitcode_lib
 
         flags = {
             "amd64": "-m64",
             "x86": "-m32", }
 
         self.assertTrue(os.path.exists(self.clang))
+        self.assertTrue(os.path.exists(infile))
+
         args = [self.clang,
                 "-O3",
                 flags[arch],

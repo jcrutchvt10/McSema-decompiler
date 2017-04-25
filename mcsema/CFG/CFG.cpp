@@ -664,7 +664,7 @@ static NativeInstPtr DeserializeInst(
   std::vector<uint8_t> bytes(bytes_str.begin(), bytes_str.end());
 
   //produce an MCInst from the instruction buffer using the ByteDecoder
-  NativeInstPtr ip = architecture_module->decodeInstruction(addr, bytes);
+  NativeInstPtr ip = architecture_module->decodeInstruction(gDisassembler, addr, bytes);
   if (!ip) {
     std::cerr
         << "Unable to deserialize inst at " << std::hex << addr << std::endl;

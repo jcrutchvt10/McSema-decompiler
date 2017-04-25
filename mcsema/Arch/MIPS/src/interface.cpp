@@ -7,11 +7,8 @@ namespace mcsema
 namespace mips
 {
 
-MCSEMA_PUBLIC_SYMBOL void GetSupportedArchitectures(std::list<std::string> &supported_architectures) noexcept {
-  supported_architectures = {
-    "mips32",
-    "mips64"
-  };
+MCSEMA_PUBLIC_SYMBOL std::list<std::string> GetSupportedArchitectures() noexcept {
+  return { "mips32", "mips64" };
 }
 
 MCSEMA_PUBLIC_SYMBOL IMCSemaModule *CreateModule(const std::string &architecture_name) noexcept {

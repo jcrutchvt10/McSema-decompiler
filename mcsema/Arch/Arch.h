@@ -118,6 +118,7 @@ class MCInst;
 
 typedef uint64_t VA;
 
+/// move this inside the IMCSemaModule interface
 enum SystemArchType {
   _X86_,
   _X86_64_
@@ -138,10 +139,6 @@ int ArchAddressSize(void);
 
 const std::string &ArchTriple(void);
 const std::string &ArchDataLayout(void);
-
-// Decodes the instruction, and returns the number of bytes decoded.
-size_t ArchDecodeInstruction(const uint8_t *bytes, const uint8_t *bytes_end,
-                             uintptr_t va, llvm::MCInst &inst);
 
 // Return the default calling convention for code on this architecture.
 llvm::CallingConv::ID ArchCallingConv(void);
