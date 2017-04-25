@@ -9,7 +9,7 @@ import platform
 import json
 import base64
 
-DEBUG = False
+DEBUG = True
 
 def b64(f):
     """ Base64 encodes the file 'f' """
@@ -87,8 +87,6 @@ class LinuxTest(unittest.TestCase):
 
         with open(errfile, "w") as err_devnull:
             with open(outfile, "w") as out_devnull:
-                # XXXXXXXXXXXXXXXXXXXXXX
-                sys.stderr.write("executing: {}\n".format(" ".join(procargs)))
                 if DEBUG:
                     sys.stderr.write("executing: {}\n".format(" ".join(procargs)))
                 po = subprocess.Popen(procargs, stderr=stderr or err_devnull, stdout=stdout or out_devnull)
@@ -135,10 +133,6 @@ class LinuxTest(unittest.TestCase):
 
         runtime_lib = os.environ["MCSEMA_BUILD_FOLDER"] + "/mcsema/Runtime/X86/" + arch_lib_name[arch]
         bitcode_lib = os.environ["MCSEMA_BUILD_FOLDER"] + "/mcsema/Runtime/X86/" + arch_bitcode_name[arch]
-
-        # XXXXXXXXXXXXXXXXXX
-        print "runtime_lib is " + runtime_lib
-        print "bitcode_lib is " + bitcode_lib
 
         flags = {
             "amd64": "-m64",
