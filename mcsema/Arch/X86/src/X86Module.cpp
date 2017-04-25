@@ -3,14 +3,35 @@
 #include "Lift.h"
 #include "Dispatch.h"
 
+#include "Semantics/fpu.h"
+#include "Semantics/MOV.h"
+#include "Semantics/CMOV.h"
+#include "Semantics/Jcc.h"
+#include "Semantics/MULDIV.h"
+#include "Semantics/CMPTEST.h"
+#include "Semantics/ADD.h"
+#include "Semantics/SUB.h"
+#include "Semantics/Misc.h"
+#include "Semantics/bitops.h"
+#include "Semantics/ShiftRoll.h"
+#include "Semantics/Exchanges.h"
+#include "Semantics/INCDECNEG.h"
+#include "Semantics/Stack.h"
+#include "Semantics/String.h"
+#include "Semantics/Branches.h"
+#include "Semantics/SETcc.h"
+#include "Semantics/SSE.h"
+
+#include <llvm/Support/TargetSelect.h>
+
 struct X86Module::PrivateData final {
 };
 
 X86Module::X86Module() : d(new PrivateData) {
-  /*LLVMInitializeX86TargetInfo();
+  LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
   LLVMInitializeX86AsmParser();
-  LLVMInitializeX86Disassembler();*/
+  LLVMInitializeX86Disassembler();
 }
 
 X86Module::~X86Module() {
@@ -49,7 +70,24 @@ void X86Module::initializeRegisterState(llvm::LLVMContext *context) const noexce
 }
 
 void X86Module::initializeInstructionDispatchTable(DispatchMap &dispatch_map) const noexcept {
-  X86InitInstructionDispatch(dispatch_map);
+  FPU_populateDispatchMap(dispatch_map);
+  MOV_populateDispatchMap(dispatch_map);
+  CMOV_populateDispatchMap(dispatch_map);
+  Jcc_populateDispatchMap(dispatch_map);
+  MULDIV_populateDispatchMap(dispatch_map);
+  CMPTEST_populateDispatchMap(dispatch_map);
+  ADD_populateDispatchMap(dispatch_map);
+  Misc_populateDispatchMap(dispatch_map);
+  SUB_populateDispatchMap(dispatch_map);
+  Bitops_populateDispatchMap(dispatch_map);
+  ShiftRoll_populateDispatchMap(dispatch_map);
+  Exchanges_populateDispatchMap(dispatch_map);
+  INCDECNEG_populateDispatchMap(dispatch_map);
+  Stack_populateDispatchMap(dispatch_map);
+  String_populateDispatchMap(dispatch_map);
+  Branches_populateDispatchMap(dispatch_map);
+  SETcc_populateDispatchMap(dispatch_map);
+  SSE_populateDispatchMap(dispatch_map);
 }
 
 llvm::Value *X86Module::memoryAsDataReference(llvm::BasicBlock *basic_block, NativeModulePtr native_module, const llvm::MCInst &instruction, NativeInstPtr native_instruction, uint32_t which) const noexcept {

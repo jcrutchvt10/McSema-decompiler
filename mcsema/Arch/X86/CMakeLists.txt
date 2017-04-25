@@ -62,8 +62,6 @@ set(X86MODULE_PRIVATESOURCEFILES
     src/Lift.cpp
     src/Register.h
     src/Register.cpp
-    src/Dispatch.h
-    src/Dispatch.cpp
 
     src/Semantics/ADD.cpp
     src/Semantics/bitops.cpp
