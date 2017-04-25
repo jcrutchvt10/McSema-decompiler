@@ -26,10 +26,12 @@
 
 struct X86Module::PrivateData final {
   int address_size;
+  llvm::StructType *register_struct;
 };
 
 X86Module::X86Module(int address_size) : d(new PrivateData) {
   d->address_size = address_size;
+  d->register_struct = nullptr;
 
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
@@ -45,7 +47,10 @@ std::string X86Module::getRegisterName(MCSemaRegs id) const noexcept {
 }
 
 llvm::StructType *X86Module::getRegisterStateStructureType() const noexcept {
-  return X86RegStateStructType();
+  if (d->register_struct == nullptr)
+    throw std::logic_error("The X86 module has not been initialized!");
+
+  return d->register_struct;
 }
 
 void X86Module::allocateRegisterVariables(llvm::BasicBlock *basic_block) const noexcept {
@@ -69,7 +74,10 @@ llvm::Function *X86Module::createRegisterStateTracer(llvm::Module *module) const
 }
 
 void X86Module::initializeRegisterState(llvm::LLVMContext *context) const noexcept {
-  X86InitRegisterState(context);
+  if (d->register_struct != nullptr)
+    throw std::logic_error("The X86 module has been initialized twice!");
+
+  d->register_struct = X86InitRegisterState(context, d->address_size);
 }
 
 void X86Module::initializeInstructionDispatchTable(DispatchMap &dispatch_map) const noexcept {
@@ -278,7 +286,7 @@ NativeInstPtr X86Module::decodeInstruction(const llvm::MCDisassembler *llvm_disa
   return inst;
 }
 
-bool X86Module::initializeArchitecture(ArchitectureInformation &architecture_information, llvm::LLVMContext *context, const std::string &operating_system, const std::string &architecture_name) const noexcept {
+bool X86Module::initializeArchitecture(ArchitectureInformation &architecture_information, const std::string &operating_system, const std::string &architecture_name) const noexcept {
   if (operating_system != "win32" && operating_system != "linux")
     return false;
 

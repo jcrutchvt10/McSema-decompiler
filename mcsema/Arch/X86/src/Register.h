@@ -45,14 +45,13 @@
 #include "mcsema/Arch/Register.h"
 #include "mcsema/BC/Util.h"
 
-void X86InitRegisterState(llvm::LLVMContext *context);
+llvm::StructType *X86InitRegisterState(llvm::LLVMContext *context, int address_size);
 const std::string &X86RegisterName(MCSemaRegs reg);
 MCSemaRegs X86RegisterNumber(const std::string &name);
 unsigned X86RegisterOffset(MCSemaRegs reg);
 MCSemaRegs X86RegisterParent(MCSemaRegs reg);
 void X86AllocRegisterVars(llvm::BasicBlock *b);
 unsigned X86RegisterSize(MCSemaRegs reg);
-llvm::StructType *X86RegStateStructType(void);
 llvm::Constant *GetPrintf(llvm::Module *M);
 llvm::Function *X86GetOrCreateRegStateTracer(llvm::Module *M);
 llvm::Function *X86GetOrCreateSemantics(llvm::Module *M, const std::string &instr);

@@ -31,5 +31,5 @@ public:
   virtual llvm::Value *memoryAsDataReference(llvm::BasicBlock *basic_block, NativeModulePtr native_module, const llvm::MCInst &instruction, NativeInstPtr native_instruction, uint32_t which) const noexcept override;
   virtual NativeInst::Prefix getInstructionPrefix(const llvm::MCInst &inst) const noexcept override;
   virtual NativeInstPtr decodeInstruction(const llvm::MCDisassembler *llvm_disassembler, std::uintptr_t virtual_address, const std::vector<uint8_t> &buffer) const noexcept override;
-  virtual bool initializeArchitecture(ArchitectureInformation &architecture_information, llvm::LLVMContext *context, const std::string &operating_system, const std::string &architecture_name) const noexcept override;
+  virtual bool initializeArchitecture(ArchitectureInformation &architecture_information, const std::string &operating_system, const std::string &architecture_name) const noexcept override;
 };

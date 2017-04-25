@@ -65,8 +65,6 @@ static std::unordered_map<std::string, MCSemaRegs> gRegNum;
 
 static std::vector<llvm::Type *> gRegFields;
 
-static llvm::StructType *gRegStateStruct = nullptr;
-
 static MCSemaRegs gLastAddedReg = llvm::X86::NoRegister;
 static unsigned gNumRegs = 0;
 
@@ -100,11 +98,8 @@ static void AddSubReg(MCSemaRegs reg, const char *name,
 
 }  // namespace
 
-void X86InitRegisterState(llvm::LLVMContext *context) {
-  if (!gContext) {
-    gContext = context;
-  }
-  auto reg_type = llvm::Type::getIntNTy(*context, ArchAddressSize());
+llvm::StructType *X86InitRegisterState(llvm::LLVMContext *context, int address_size) {
+  auto reg_type = llvm::Type::getIntNTy(*context, address_size);
   auto int8_type = llvm::Type::getInt8Ty(*context);
   auto int16_type = llvm::Type::getInt16Ty(*context);
   auto int32_type = llvm::Type::getInt32Ty(*context);
@@ -258,7 +253,7 @@ void X86InitRegisterState(llvm::LLVMContext *context) {
   AddReg(llvm::X86::XMM14, "XMM14", int128_type);
   AddReg(llvm::X86::XMM15, "XMM15", int128_type);
 
-  gRegStateStruct = llvm::StructType::create(*context, gRegFields, "RegState", false);
+  return llvm::StructType::create(*context, gRegFields, "RegState", false);
 }
 
 const std::string &X86RegisterName(MCSemaRegs reg) {
@@ -351,10 +346,6 @@ unsigned X86RegisterSize(MCSemaRegs reg) {
   } else {
     return it->second.read_type->getScalarSizeInBits();
   }
-}
-
-llvm::StructType *X86RegStateStructType(void) {
-  return gRegStateStruct;
 }
 
 llvm::Constant *GetPrintf(llvm::Module *M) {

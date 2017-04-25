@@ -64,6 +64,6 @@ NativeInstPtr MipsModule::decodeInstruction(const llvm::MCDisassembler *llvm_dis
   return nullptr;
 }
 
-bool MipsModule::initializeArchitecture(ArchitectureInformation &architecture_information, llvm::LLVMContext *context, const std::string &operating_system, const std::string &architecture_name) const noexcept {
+bool MipsModule::initializeArchitecture(ArchitectureInformation &architecture_information, const std::string &operating_system, const std::string &architecture_name) const noexcept {
   return true;
 }

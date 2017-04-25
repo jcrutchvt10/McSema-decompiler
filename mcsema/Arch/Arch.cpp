@@ -112,11 +112,8 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
     return false;
   }
 
-  architecture_module->initializeRegisterState(context);
-  architecture_module->initializeInstructionDispatchTable(gDispatcher);
-
   ArchitectureInformation arch_info;
-  if (!architecture_module->initializeArchitecture(arch_info, context, os, arch))
+  if (!architecture_module->initializeArchitecture(arch_info, os, arch))
     return false;
 
   gOSType = arch_info.operating_system_type;
@@ -125,6 +122,9 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
   gArchType = arch_info.architecture_type;
   gCallingConv = arch_info.calling_convention;
   gAddressSize = arch_info.address_size;
+
+  architecture_module->initializeRegisterState(context);
+  architecture_module->initializeInstructionDispatchTable(gDispatcher);
 
   return InitInstructionDecoder();
 }
