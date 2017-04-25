@@ -42,6 +42,7 @@
 
 #include "mcsema/CFG/Externals.h"
 #include "mcsema/cfgToLLVM/JumpTables.h"
+#include "../Globals.h"
 
 bool NativeInst::terminator(void) const {
   return this->is_terminator;
@@ -653,192 +654,6 @@ static ExternalCodeRefPtr getExternal(
   return ExternalCodeRefPtr();
 }
 
-enum : size_t {
-  kMaxNumInstrBytes = 16ULL  // 15 on x86 and amd64.
-};
-
-static NativeInst::Prefix GetPrefix(const llvm::MCInst &inst) {
-  switch (inst.getOpcode()) {
-    case llvm::X86::REP_MOVSB_32:
-    case llvm::X86::REP_MOVSB_64:
-    case llvm::X86::REP_MOVSW_32:
-    case llvm::X86::REP_MOVSW_64:
-    case llvm::X86::REP_MOVSD_32:
-    case llvm::X86::REP_MOVSD_64:
-    case llvm::X86::REP_MOVSQ_64:
-    case llvm::X86::REP_LODSB_32:
-    case llvm::X86::REP_LODSB_64:
-    case llvm::X86::REP_LODSW_32:
-    case llvm::X86::REP_LODSW_64:
-    case llvm::X86::REP_LODSD_32:
-    case llvm::X86::REP_LODSD_64:
-    case llvm::X86::REP_LODSQ_64:
-    case llvm::X86::REP_STOSB_32:
-    case llvm::X86::REP_STOSB_64:
-    case llvm::X86::REP_STOSW_32:
-    case llvm::X86::REP_STOSW_64:
-    case llvm::X86::REP_STOSD_32:
-    case llvm::X86::REP_STOSD_64:
-    case llvm::X86::REP_STOSQ_64:
-      return NativeInst::RepPrefix;
-
-    case llvm::X86::REPE_CMPSB_32:
-    case llvm::X86::REPE_CMPSB_64:
-    case llvm::X86::REPE_CMPSW_32:
-    case llvm::X86::REPE_CMPSW_64:
-    case llvm::X86::REPE_CMPSD_32:
-    case llvm::X86::REPE_CMPSD_64:
-    case llvm::X86::REPE_CMPSQ_64:
-      return NativeInst::RepPrefix;
-
-    case llvm::X86::REPNE_CMPSB_32:
-    case llvm::X86::REPNE_CMPSB_64:
-    case llvm::X86::REPNE_CMPSW_32:
-    case llvm::X86::REPNE_CMPSW_64:
-    case llvm::X86::REPNE_CMPSD_32:
-    case llvm::X86::REPNE_CMPSD_64:
-    case llvm::X86::REPNE_CMPSQ_64:
-      return NativeInst::RepNePrefix;
-
-    case llvm::X86::REPE_SCASB_32:
-    case llvm::X86::REPE_SCASB_64:
-    case llvm::X86::REPE_SCASW_32:
-    case llvm::X86::REPE_SCASW_64:
-    case llvm::X86::REPE_SCASD_32:
-    case llvm::X86::REPE_SCASD_64:
-    case llvm::X86::REPE_SCASQ_64:
-      return NativeInst::RepPrefix;
-
-    case llvm::X86::REPNE_SCASB_32:
-    case llvm::X86::REPNE_SCASB_64:
-    case llvm::X86::REPNE_SCASW_32:
-    case llvm::X86::REPNE_SCASW_64:
-    case llvm::X86::REPNE_SCASD_32:
-    case llvm::X86::REPNE_SCASD_64:
-    case llvm::X86::REPNE_SCASQ_64:
-      return NativeInst::RepNePrefix;
-  }
-
-  for (const auto &op : inst) {
-    if (op.isReg()) {
-      if (op.getReg() == llvm::X86::GS) {
-        return NativeInst::GSPrefix;
-      } else if (op.getReg() == llvm::X86::FS) {
-        return NativeInst::FSPrefix;
-      }
-    }
-  }
-
-  return NativeInst::NoPrefix;
-}
-
-static NativeInstPtr DecodeInst(
-    uintptr_t addr, const std::vector<uint8_t> &bytes) {
-
-  VA nextVA = addr;
-  // Get the maximum number of bytes for decoding.
-  uint8_t decodable_bytes[kMaxNumInstrBytes] = {};
-  std::copy(bytes.begin(), bytes.end(), decodable_bytes);
-  auto max_size = bytes.size();
-
-  // Try to decode the instruction.
-  llvm::MCInst mcInst;
-  auto num_decoded_bytes = ArchDecodeInstruction(
-      decodable_bytes, decodable_bytes + max_size, addr, mcInst);
-
-  if (!num_decoded_bytes) {
-    std::cerr
-        << "Failed to decode instruction at address "
-        << std::hex << addr << std::endl;
-    return nullptr;
-  }
-
-  NativeInstPtr inst = new NativeInst(
-      addr, num_decoded_bytes, mcInst, GetPrefix(mcInst));
-
-  // Mark some operands as being RIP-relative.
-  for (auto i = 0U; i < mcInst.getNumOperands(); ++i) {
-    const auto &Op = mcInst.getOperand(i);
-    if (Op.isReg() && Op.getReg() == llvm::X86::RIP) {
-      inst->set_rip_relative(i);
-    }
-  }
-
-  llvm::MCOperand oper;
-
-  //ask if this is a jmp, and figure out what the true / false follows are
-  switch (mcInst.getOpcode()) {
-    case llvm::X86::JMP32m:
-    case llvm::X86::JMP32r:
-    case llvm::X86::JMP64m:
-    case llvm::X86::JMP64r:
-      inst->set_terminator();
-      break;
-    case llvm::X86::RETL:
-    case llvm::X86::RETIL:
-    case llvm::X86::RETIQ:
-    case llvm::X86::RETIW:
-    case llvm::X86::RETQ:
-      inst->set_terminator();
-      break;
-    case llvm::X86::JMP_4:
-    case llvm::X86::JMP_1:
-      oper = mcInst.getOperand(0);
-      if (oper.isImm()) {
-        nextVA += oper.getImm() + num_decoded_bytes;
-        inst->set_tr(nextVA);
-      } else {
-        std::cerr << "Unhandled indirect branch at 0x" << std::hex << addr;
-        return nullptr;
-      }
-      break;
-    case llvm::X86::LOOP:
-    case llvm::X86::LOOPE:
-    case llvm::X86::LOOPNE:
-    case llvm::X86::JO_4:
-    case llvm::X86::JO_1:
-    case llvm::X86::JNO_4:
-    case llvm::X86::JNO_1:
-    case llvm::X86::JB_4:
-    case llvm::X86::JB_1:
-    case llvm::X86::JAE_4:
-    case llvm::X86::JAE_1:
-    case llvm::X86::JE_4:
-    case llvm::X86::JE_1:
-    case llvm::X86::JNE_4:
-    case llvm::X86::JNE_1:
-    case llvm::X86::JBE_4:
-    case llvm::X86::JBE_1:
-    case llvm::X86::JA_4:
-    case llvm::X86::JA_1:
-    case llvm::X86::JS_4:
-    case llvm::X86::JS_1:
-    case llvm::X86::JNS_4:
-    case llvm::X86::JNS_1:
-    case llvm::X86::JP_4:
-    case llvm::X86::JP_1:
-    case llvm::X86::JNP_4:
-    case llvm::X86::JNP_1:
-    case llvm::X86::JL_4:
-    case llvm::X86::JL_1:
-    case llvm::X86::JGE_4:
-    case llvm::X86::JGE_1:
-    case llvm::X86::JLE_4:
-    case llvm::X86::JLE_1:
-    case llvm::X86::JG_4:
-    case llvm::X86::JG_1:
-    case llvm::X86::JCXZ:
-    case llvm::X86::JECXZ:
-    case llvm::X86::JRCXZ:
-      oper = mcInst.getOperand(0);
-      inst->set_tr(addr + oper.getImm() + num_decoded_bytes);
-      inst->set_fa(addr + num_decoded_bytes);
-      break;
-  }
-
-  return inst;
-}
-
 static NativeInstPtr DeserializeInst(
     const ::Instruction &inst,
     const std::list<ExternalCodeRefPtr> &extcode) {
@@ -849,7 +664,7 @@ static NativeInstPtr DeserializeInst(
   std::vector<uint8_t> bytes(bytes_str.begin(), bytes_str.end());
 
   //produce an MCInst from the instruction buffer using the ByteDecoder
-  NativeInstPtr ip = DecodeInst(addr, bytes);
+  NativeInstPtr ip = architecture_module->decodeInstruction(addr, bytes);
   if (!ip) {
     std::cerr
         << "Unable to deserialize inst at " << std::hex << addr << std::endl;

@@ -78,12 +78,15 @@ protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${CMAKE_SOURCE_DIR}/mcsem
 add_custom_target(protobuf_python_module DEPENDS ${PROJECT_PROTOBUFPYTHONMODULE})
 
 #
-# target settings
+# get the architecture modules
 #
 
-include(LLVMUtils)
+# todo: make a dedicated 'include' folder for the headers used by the architecture modules
+set(MCSEMA_PUBLICINCLUDEDIRECTORIES
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/mcsema/include
+)
 
-# get the submodules
 message(STATUS "Discovering architecture modules...")
 file(GLOB architecture_modules LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/mcsema/Arch/*")
 
@@ -104,6 +107,12 @@ foreach(module_path ${architecture_modules})
     string(TOLOWER "mcsema-${module_name}" module_target)
     list(APPEND PROJECT_LIBRARIES ${module_target})
 endforeach ()
+
+#
+# target settings
+#
+
+include(LLVMUtils)
 
 set(PROJECT_INCLUDEDIRECTORIES
     ${CMAKE_BINARY_DIR}

@@ -55,3 +55,11 @@ void MipsModule::initializeInstructionDispatchTable(DispatchMap &dispatch_map) c
 llvm::Value *MipsModule::memoryAsDataReference(llvm::BasicBlock *basic_block, NativeModulePtr native_module, const llvm::MCInst &instruction, NativeInstPtr native_instruction, uint32_t which) const noexcept {
   return nullptr;
 }
+
+NativeInst::Prefix MipsModule::getInstructionPrefix(const llvm::MCInst &inst) const noexcept {
+  return { };
+}
+
+NativeInstPtr MipsModule::decodeInstruction(uintptr_t virtual_address, const std::vector<uint8_t> &buffer) const noexcept {
+  return nullptr;
+}

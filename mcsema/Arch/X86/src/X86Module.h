@@ -24,4 +24,6 @@ public:
   virtual void initializeRegisterState(llvm::LLVMContext *context) const noexcept override;
   virtual void initializeInstructionDispatchTable(DispatchMap &dispatch_map) const noexcept override;
   virtual llvm::Value *memoryAsDataReference(llvm::BasicBlock *basic_block, NativeModulePtr native_module, const llvm::MCInst &instruction, NativeInstPtr native_instruction, uint32_t which) const noexcept override;
+  virtual NativeInst::Prefix getInstructionPrefix(const llvm::MCInst &inst) const noexcept override;
+  virtual NativeInstPtr decodeInstruction(std::uintptr_t virtual_address, const std::vector<uint8_t> &buffer) const noexcept override;
 };
