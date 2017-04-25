@@ -1,22 +1,17 @@
 #pragma once
 
 #include <mcsema/IMCSemaModule.h>
-#include <mcsema/mips/utils.h>
+#include <mcsema/X86/utils.h>
 
 #include <memory>
 
-class MCSEMA_PRIVATE_SYMBOL MipsModule final : public IMCSemaModule {
+class MCSEMA_PRIVATE_SYMBOL X86Module final : public IMCSemaModule {
   struct PrivateData;
   std::unique_ptr<PrivateData> d;
 
 public:
-  enum class Bitness {
-    x32,
-    x64
-  };
-
-  MipsModule(Bitness bitness);
-  virtual ~MipsModule();
+  X86Module();
+  virtual ~X86Module();
 
   // IMCSemaModule interface
   virtual std::string getRegisterName(MCSemaRegs id) const noexcept override;

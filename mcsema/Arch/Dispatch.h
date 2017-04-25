@@ -5,7 +5,7 @@
 
 #include <map>
 
-#include "mcsema/Arch/Arch.h"
+#include "Arch.h"
 
 namespace llvm {
 class BasicBlock;

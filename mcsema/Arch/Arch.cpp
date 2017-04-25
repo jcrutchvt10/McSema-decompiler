@@ -28,6 +28,7 @@
 
 #include <mcsema/Globals.h>
 #include <mcsema/mips/interface.h>
+#include <mcsema/X86/interface.h>
 
 namespace {
 
@@ -61,76 +62,6 @@ static bool InitInstructionDecoder(void) {
 }
 
 }  // namespace
-
-//
-// dummy class to encapsulate the X86 module into
-// the new interface (pending a refactor)
-//
-
-void X86InitRegisterState(llvm::LLVMContext *);
-void X86InitInstructionDispatch(DispatchMap &dispatcher);
-const std::string &X86RegisterName(MCSemaRegs reg);
-MCSemaRegs X86RegisterNumber(const std::string &name);
-unsigned X86RegisterOffset(MCSemaRegs reg);
-MCSemaRegs X86RegisterParent(MCSemaRegs reg);
-void X86AllocRegisterVars(llvm::BasicBlock *);
-unsigned X86RegisterSize(MCSemaRegs reg);
-llvm::StructType *X86RegStateStructType(void);
-llvm::Function *X86GetOrCreateRegStateTracer(llvm::Module *);
-llvm::Function *X86GetOrCreateSemantics(llvm::Module *, const std::string &instr);
-InstTransResult X86LiftInstruction(TranslationContext &, llvm::BasicBlock *&, InstructionLifter *);
-
-class X86Module final : public IMCSemaModule {
-public:
-  X86Module() {
-    LLVMInitializeX86TargetInfo();
-    LLVMInitializeX86TargetMC();
-    LLVMInitializeX86AsmParser();
-    LLVMInitializeX86Disassembler();
-  }
-
-  virtual ~X86Module() {
-  }
-
-  // IMCSemaModule interface
-  virtual std::string getRegisterName(MCSemaRegs id) const noexcept override {
-    return X86RegisterName(id);
-  }
-
-  virtual llvm::StructType *getRegisterStateStructureType() const noexcept override {
-    return X86RegStateStructType();
-  }
-
-  virtual void allocateRegisterVariables(llvm::BasicBlock *basic_block) const noexcept override {
-    X86AllocRegisterVars(basic_block);
-  }
-
-  virtual std::size_t getRegisterSize(MCSemaRegs id) const noexcept override {
-    return X86RegisterSize(id);
-  }
-
-  virtual InstTransResult liftInstruction(TranslationContext &context, llvm::BasicBlock *&basic_block, InstructionLifter *lifter) const noexcept override {
-    return X86LiftInstruction(context, basic_block, lifter);
-  }
-
-  virtual llvm::Function *processSemantics(llvm::Module *module, const std::string &unknown) const noexcept override {
-    return X86GetOrCreateSemantics(module, unknown);
-  }
-
-  virtual llvm::Function *createRegisterStateTracer(llvm::Module *module) const noexcept override {
-    return X86GetOrCreateRegStateTracer(module);
-  }
-
-  virtual void initializeRegisterState(llvm::LLVMContext *context) const noexcept override {
-    X86InitRegisterState(context);
-
-  }
-
-  virtual void initializeInstructionDispatchTable(DispatchMap &dispatch_map) const noexcept override {
-    X86InitInstructionDispatch(gDispatcher);
-  }
-};
-
 
 // Define the generic arch function pointers.
 bool ListArchSupportedInstructions(const std::string &triple, llvm::raw_ostream &s, bool ListSupported, bool ListUnsupported) {
@@ -223,7 +154,7 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
   }
 
   if (arch == "x86" || arch == "amd64") {
-    architecture_module = llvm::make_unique<X86Module>();
+    architecture_module = std::unique_ptr<IMCSemaModule>(mcsema::x86::CreateModule(arch));
   } else if (arch == "mips32" || arch == "mips64") {
     architecture_module = std::unique_ptr<IMCSemaModule>(mcsema::mips::CreateModule(arch));
   } else {

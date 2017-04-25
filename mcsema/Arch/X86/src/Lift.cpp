@@ -28,27 +28,15 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <llvm/IR/DataLayout.h>
-#include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/Intrinsics.h>
+#include "Lift.h"
 
-#include <llvm/Support/CodeGen.h>
-
-#include "mcsema/Arch/Dispatch.h"
-
-#include "JumpTables.h"
-
-#include "mcsema/Arch/X86/Semantics/fpu.h"
-#include "mcsema/Arch/X86/Semantics/MOV.h"
-#include "mcsema/Arch/X86/Semantics/flagops.h"
-#include "mcsema/Arch/X86/Util.h"
 
 // do any instruction preprocessing/conversion
 // before moving on to translation.
 // currently used to turn non-conforming jump tables
 // into data sections
 //
-static void PreProcessInst(TranslationContext &ctx, llvm::BasicBlock *&block) {
+void PreProcessInst(TranslationContext &ctx, llvm::BasicBlock *&block) {
   auto ip = ctx.natI;
   auto &inst = ip->get_inst();
   // only add data sections for non-conformant jump tables

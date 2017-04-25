@@ -49,10 +49,10 @@
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/Arch/Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/fpu.h"
+#include "../Util.h"
+#include "fpu.h"
 
-#include "mcsema/BC/Util.h"
+#include <mcsema/BC/Util.h>
 
 #ifndef M_PIl
 # define M_PIl    3.141592653589793238462643383279502884L /* pi */

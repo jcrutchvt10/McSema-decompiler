@@ -28,27 +28,43 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#pragma once
+#include "../Util.h"
+#include <mcsema/BC/Util.h>
+#include "llvm/Support/Debug.h"
 
-#include "mcsema/Arch/X86/Semantics/flagops.h"
-
-#include "mcsema/BC/Util.h"
-
-class DispatchMap;
+#include <mcsema/cfgToLLVM/TransExcn.h>
 
 template<int width>
-static void doCmpVV(NativeInstPtr ip, llvm::BasicBlock *b, llvm::Value *lhs,
-                    llvm::Value *rhs) {
-  auto subRes = llvm::BinaryOperator::Create(llvm::Instruction::Sub, lhs, rhs,
-                                             "", b);
+static InstTransResult doRMMov(NativeInstPtr ip, llvm::BasicBlock *b,
+                               llvm::Value *srcAddr, const llvm::MCOperand &dst) {
+  //MOV <r>, <mem>
+  TASSERT(dst.isReg(), "");
+  TASSERT(srcAddr != nullptr, "");
 
-  //set the flags
-  WriteAFAddSub<width>(b, subRes, lhs, rhs);
-  WritePF<width>(b, subRes);
-  WriteZF<width>(b, subRes);
-  WriteSF<width>(b, subRes);
-  WriteCFSub(b, lhs, rhs);
-  WriteOFSub<width>(b, subRes, lhs, rhs);
+  R_WRITE<width>(b, dst.getReg(), M_READ<width>(ip, b, srcAddr));
+
+  return ContinueBlock;
 }
 
-void CMPTEST_populateDispatchMap(DispatchMap &m);
+template<int width>
+static InstTransResult doMRMov(NativeInstPtr ip, llvm::BasicBlock *&b,
+                        llvm::Value *dstAddr, const llvm::MCOperand &src) {
+  //MOV <mem>, <r>
+  TASSERT(src.isReg(), "src is not a register");
+  TASSERT(dstAddr != NULL, "Destination addr can't be null");
+  M_WRITE<width>(ip, b, dstAddr, R_READ<width>(b, src.getReg()));
+  return ContinueBlock;
+}
+
+template<int width>
+static InstTransResult doRRMov(NativeInstPtr ip, llvm::BasicBlock *b,
+                        const llvm::MCOperand &dst,
+                        const llvm::MCOperand &src) {
+  //MOV <r>, <r>
+  TASSERT(src.isReg(), "");
+  TASSERT(dst.isReg(), "");
+  R_WRITE<width>(b, dst.getReg(), R_READ<width>(b, src.getReg()));
+  return ContinueBlock;
+}
+
+void MOV_populateDispatchMap(DispatchMap &m);

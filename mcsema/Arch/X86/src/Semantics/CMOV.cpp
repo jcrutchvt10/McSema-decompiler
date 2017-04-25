@@ -48,8 +48,8 @@
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/Arch/Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/CMOV.h"
+#include "../Util.h"
+#include "CMOV.h"
 
 #include "mcsema/BC/Util.h"
 

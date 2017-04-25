@@ -46,11 +46,11 @@
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/Arch/Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/CMPTEST.h"
-#include "mcsema/Arch/X86/Semantics/flagops.h"
+#include "../Util.h"
+#include "CMPTEST.h"
+#include "flagops.h"
 
-#include "mcsema/BC/Util.h"
+#include <mcsema/BC/Util.h>
 
 #define NASSERT(cond) TASSERT(cond, "")
 

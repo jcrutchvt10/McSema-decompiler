@@ -44,15 +44,15 @@
 
 #include <llvm/Support/Debug.h>
 
-#include "mcsema/Arch/Arch.h"
-#include "mcsema/Arch/Dispatch.h"
-#include "mcsema/Arch/Register.h"
+#include "../../Arch.h"
+#include "../../Dispatch.h"
+#include "../../Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/flagops.h"
-#include "mcsema/Arch/X86/Semantics/ShiftRoll.h"
+#include "../Util.h"
+#include "flagops.h"
+#include "ShiftRoll.h"
 
-#include "mcsema/BC/Util.h"
+#include <mcsema/BC/Util.h>
 
 template<int width>
 static llvm::Value *getBit(llvm::BasicBlock *b, llvm::Value *val, int which) {

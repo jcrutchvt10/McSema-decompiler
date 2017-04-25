@@ -48,8 +48,8 @@
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/Arch/Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/Branches.h"
+#include "../Util.h"
+#include "Branches.h"
 #include "mcsema/Globals.h"
 #include "mcsema/CFG/Externals.h"
 #include "mcsema/BC/Util.h"

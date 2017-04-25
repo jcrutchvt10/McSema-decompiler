@@ -49,10 +49,10 @@
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/Arch/Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/Jcc.h"
+#include "../Util.h"
+#include "Jcc.h"
 
-#include "mcsema/BC/Util.h"
+#include <mcsema/BC/Util.h>
 
 #define NASSERT(cond) TASSERT(cond, "")
 

@@ -50,13 +50,13 @@
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/Arch/Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/Stack.h"
-#include "mcsema/Arch/X86/Semantics/MOV.h"
+#include "../Util.h"
+#include "Stack.h"
+#include "MOV.h"
 
-#include "mcsema/BC/Util.h"
+#include <mcsema/BC/Util.h>
 
-#include "mcsema/CFG/Externals.h"
+#include <mcsema/CFG/Externals.h>
 
 #define NASSERT(cond) TASSERT(cond, "")
 

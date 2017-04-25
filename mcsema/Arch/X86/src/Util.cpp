@@ -34,10 +34,10 @@
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/Support/CodeGen.h>
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/BC/Util.h"
-#include "mcsema/CFG/Externals.h"
-#include "mcsema/cfgToLLVM/TransExcn.h"
+#include "Util.h"
+#include <mcsema/BC/Util.h>
+#include <mcsema/CFG/Externals.h>
+#include <mcsema/cfgToLLVM/TransExcn.h>
 
 // check if addr falls into a data section, and is at least minAddr.
 // the minAddr check exists for times when we are not sure if an address

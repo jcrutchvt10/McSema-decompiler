@@ -9,6 +9,11 @@ MipsModule::MipsModule(Bitness bitness) : d(new PrivateData) {
     d->bitness = 32;
   else
     d->bitness = 64;
+
+  /*LLVMInitializeMipsTargetInfo();
+  LLVMInitializeMipsTargetMC();
+  LLVMInitializeMipsAsmParser();
+  LLVMInitializeMipsDisassembler();*/
 }
 
 MipsModule::~MipsModule() {
@@ -45,4 +50,8 @@ void MipsModule::initializeRegisterState(llvm::LLVMContext *context) const noexc
 }
 
 void MipsModule::initializeInstructionDispatchTable(DispatchMap &dispatch_map) const noexcept {
+}
+
+llvm::Value *MipsModule::memoryAsDataReference(llvm::BasicBlock *basic_block, NativeModulePtr native_module, const llvm::MCInst &instruction, NativeInstPtr native_instruction, uint32_t which) const noexcept {
+  return nullptr;
 }

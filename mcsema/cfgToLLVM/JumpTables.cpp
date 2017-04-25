@@ -43,14 +43,12 @@
 
 #include "mcsema/Arch/Dispatch.h"
 
-#include "mcsema/Arch/X86/Util.h"  // TODO(pag): MEM_AS_DATA_REF
+//#include "mcsema/Arch/X86/Util.h"  // TODO(pag): MEM_AS_DATA_REF
 
-#include "mcsema/BC/Util.h"
-
-#include "mcsema/CFG/CFG.h"
-
-#include "mcsema/cfgToLLVM/JumpTables.h"
-#include "mcsema/cfgToLLVM/TransExcn.h"
+#include <mcsema/BC/Util.h>
+#include <mcsema/CFG/CFG.h>
+#include <mcsema/cfgToLLVM/JumpTables.h>
+#include <mcsema/cfgToLLVM/TransExcn.h>
 
 // convert a jump table to a data section of symbols
 static DataSection *tableToDataSection(VA new_base, const MCSJumpTable &jt) {

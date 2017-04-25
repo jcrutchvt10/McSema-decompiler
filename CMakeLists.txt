@@ -84,12 +84,7 @@ add_custom_target(protobuf_python_module DEPENDS ${PROJECT_PROTOBUFPYTHONMODULE}
 include(LLVMUtils)
 
 # get the submodules
-message(STATUS "Adding built-in module: X86")
-add_subdirectory(${CMAKE_SOURCE_DIR}/mcsema/Arch/X86)
-list(APPEND PROJECT_SOURCEFILES ${MODULE_X86_SOURCEFILES})
-list(APPEND PROJECT_INCLUDEDIRECTORIES ${MODULE_X86_INCLUDEDIRECTORIES})
-
-message(STATUS "Scanning for additional architecture modules...")
+message(STATUS "Discovering architecture modules...")
 file(GLOB architecture_modules LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/mcsema/Arch/*")
 
 foreach(module_path ${architecture_modules})
@@ -102,11 +97,8 @@ foreach(module_path ${architecture_modules})
     endif ()
 
     get_filename_component(module_name "${module_path}" NAME)
-    if (${module_name} STREQUAL "X86")
-      continue ()
-    endif()
-
     add_subdirectory("${module_path}")
+
     message(STATUS " > ${module_name}")
 
     string(TOLOWER "mcsema-${module_name}" module_target)
@@ -130,8 +122,6 @@ set(PROJECT_INCLUDEDIRECTORIES
 )
 
 set(PROJECT_SOURCEFILES
-    ${PROJECT_SOURCEFILES}
-
     # both files are marked as auto-generated and will trigger
     # protobuf in case either is missing
     ${PROJECT_PROTOBUFSOURCEFILES}

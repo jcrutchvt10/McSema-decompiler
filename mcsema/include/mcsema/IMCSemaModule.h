@@ -2,7 +2,7 @@
 
 #include <mcsema/Arch/Register.h>
 #include <mcsema/Arch/Dispatch.h>
-
+#include <mcsema/CFG/CFG.h>
 #include <llvm/IR/Module.h>
 
 #include <string>
@@ -30,4 +30,5 @@ public:
 
   virtual void initializeRegisterState(llvm::LLVMContext *context) const noexcept = 0;
   virtual void initializeInstructionDispatchTable(DispatchMap &dispatch_map) const noexcept = 0;
+  virtual llvm::Value *memoryAsDataReference(llvm::BasicBlock *basic_block, NativeModulePtr native_module, const llvm::MCInst &instruction, NativeInstPtr native_instruction, uint32_t which) const noexcept = 0;
 };

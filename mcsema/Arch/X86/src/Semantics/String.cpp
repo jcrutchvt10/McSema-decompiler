@@ -46,9 +46,9 @@
 #include "mcsema/Arch/Dispatch.h"
 #include "mcsema/Arch/Register.h"
 
-#include "mcsema/Arch/X86/Util.h"
-#include "mcsema/Arch/X86/Semantics/flagops.h"
-#include "mcsema/Arch/X86/Semantics/String.h"
+#include "../Util.h"
+#include "flagops.h"
+#include "String.h"
 
 #include "mcsema/BC/Util.h"
 

@@ -220,7 +220,7 @@ void dataSectionToTypesContents(const std::list<DataSection> &globaldata,
     auto block_ ## nm = llvm::BasicBlock::Create( \
         (b)->getContext(), #nm, (b)->getParent())
 
-#define MEM_REFERENCE(which) MEM_AS_DATA_REF(block, natM, inst, ip, which)
+#define MEM_REFERENCE(which) architecture_module->memoryAsDataReference(block, natM, inst, ip, which)
 
 #define GENERIC_TRANSLATION_MI(NAME, NOREFS, MEMREF, IMMREF, TWOREFS) \
     static InstTransResult translate_ ## NAME ( \

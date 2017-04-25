@@ -35,7 +35,7 @@
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Instruction.h>
 
-#include "mcsema/Arch/X86/Util.h"
+#include "../Util.h"
 #include "mcsema/cfgToLLVM/TransExcn.h"
 
 template<int width>
