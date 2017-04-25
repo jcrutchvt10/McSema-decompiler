@@ -15,8 +15,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # warnings and compiler settings
-set(GLOBAL_CXXWARNINGS "-Wall -Wextra -Werror -Wconversion -pedantic -Wno-unused-parameter -Wno-c++98-compat -Wno-unreachable-code-return -Wno-nested-anon-types -Wno-extended-offsetof -Wno-gnu-anonymous-struct -Wno-gnu-designator -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-statement-expression -Wno-return-type-c-linkage -Wno-c99-extensions -Wno-ignored-attributes -Wno-unused-local-typedef")
-set(GLOBAL_CXXFLAGS "${GLOBAL_CXXFLAGS} -Wno-unknown-warning-option ${GLOBAL_CXXWARNINGS} -fPIC -fno-omit-frame-pointer -fvisibility-inlines-hidden -fno-exceptions -fno-asynchronous-unwind-tables -fno-rtti")
+set(GLOBAL_CXXWARNINGS "-Wall -Wextra -Wconversion -pedantic -Wno-unused-parameter -Wno-c++98-compat -Wno-unreachable-code-return -Wno-nested-anon-types -Wno-extended-offsetof -Wno-gnu-anonymous-struct -Wno-gnu-designator -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-statement-expression -Wno-return-type-c-linkage -Wno-c99-extensions -Wno-ignored-attributes -Wno-unused-local-typedef")
+set(GLOBAL_CXXFLAGS "${GLOBAL_CXXFLAGS} -Wno-unknown-warning-option ${GLOBAL_CXXWARNINGS} -fPIC -fno-omit-frame-pointer -fvisibility-inlines-hidden -fno-asynchronous-unwind-tables")
 
 # debug symbols
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
@@ -27,7 +27,7 @@ endif ()
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(GLOBAL_CXXFLAGS "${GLOBAL_CXXFLAGS} -O0")
 else ()
-    set(GLOBAL_CXXFLAGS "${GLOBALT_CXXFLAGS} -O3")
+    set(GLOBAL_CXXFLAGS "${GLOBAL_CXXFLAGS} -O3")
     list(APPEND GLOBAL_DEFINITIONS "NDEBUG")
 endif ()
 

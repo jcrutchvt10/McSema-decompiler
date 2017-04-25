@@ -164,7 +164,7 @@ set(PROJECT_SOURCEFILES
 
     mcsema/Globals.h
     mcsema/Globals.cpp
-    mcsema/Lift.cpp
+    mcsema/main.cpp
 
     mcsema/BC/Lift.h
     mcsema/BC/Lift.cpp
