@@ -18,6 +18,19 @@ if (NOT TARGET remill)
     message(FATAL_ERROR "The remill target does not exists!")
 endif ()
 
+if ("${REMILL_SOURCE_DIR}" STREQUAL "")
+    set(REMILL_SOURCE_DIR "${CMAKE_SOURCE_DIR}")
+endif ()
+
+if ("${MCSEMA_SOURCE_DIR}" STREQUAL "")
+    set(MCSEMA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/tools/mcsema")
+endif ()
+
+set(RUNTIME_INCLUDEDIRECTORIES
+    "${CMAKE_SOURCE_DIR}"
+    "${MCSEMA_SOURCE_DIR}"
+)
+
 # Create the Windows runtimes
 if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 
@@ -37,7 +50,7 @@ else()
       print_PE_32_windows.cpp)
 
       target_link_libraries(mcsema-print-runtime-x86 PRIVATE remill) # this is going to import the public include headers of remill
-      target_include_directories(mcsema-print-runtime-x86 PRIVATE "${REMILL_SOURCE_DIR}" "${MCSEMA_SOURCE_DIR}")
+      target_include_directories(mcsema-print-runtime-x86 PRIVATE ${RUNTIME_INCLUDEDIRECTORIES})
 
     # build a static library from this generated object
     add_library(mcsema_rt32 STATIC mcsema_rt32.obj runtime_32.o)
@@ -75,7 +88,7 @@ else()
       print_ELF_32_linux.cpp)
 
     target_link_libraries(mcsema-print-runtime-x86 PRIVATE remill) # this is going to import the public include headers of remill
-    target_include_directories(mcsema-print-runtime-x86 PRIVATE "${REMILL_SOURCE_DIR}" "${MCSEMA_SOURCE_DIR}")
+    target_include_directories(mcsema-print-runtime-x86 PRIVATE ${RUNTIME_INCLUDEDIRECTORIES})
 
     add_library(mcsema_rt32 STATIC runtime_32.S runtime_32.o)
     set_target_properties(mcsema_rt32
@@ -101,7 +114,7 @@ else()
         print_PE_64_windows.cpp)
 
         target_link_libraries(mcsema-print-runtime-amd64 PRIVATE remill) # this is going to import the public include headers of remill
-        target_include_directories(mcsema-print-runtime-amd64 PRIVATE "${REMILL_SOURCE_DIR}" "${MCSEMA_SOURCE_DIR}")
+        target_include_directories(mcsema-print-runtime-amd64 PRIVATE ${RUNTIME_INCLUDEDIRECTORIES})
 
       # build a static library from this generated object
       add_library(mcsema_rt64 STATIC mcsema_rt64.obj runtime_64.o)
@@ -140,7 +153,7 @@ else()
         print_ELF_64_linux.cpp)
 
       target_link_libraries(mcsema-print-runtime-amd64 PRIVATE remill) # this is going to import the public include headers of remill
-      target_include_directories(mcsema-print-runtime-amd64 PRIVATE "${REMILL_SOURCE_DIR}" "${MCSEMA_SOURCE_DIR}")
+      target_include_directories(mcsema-print-runtime-amd64 PRIVATE ${RUNTIME_INCLUDEDIRECTORIES})
 
       add_library(mcsema_rt64 STATIC runtime_64.S runtime_64.o)
       set_target_properties(mcsema_rt64

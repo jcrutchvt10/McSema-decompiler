@@ -59,10 +59,7 @@ DEFINE_bool(add_reg_tracer, false,
             "Add a debug function that prints out the register state before "
             "each lifted instruction execution.");
 
-DEFINE_bool(add_breakpoints, false,
-            "Add 'breakpoint' functions between every lifted instruction. This "
-            "allows one to set a breakpoint, in the lifted code, just before a "
-            "specific lifted instruction is executed.");
+DECLARE_bool(add_breakpoints);
 
 namespace mcsema {
 namespace {
