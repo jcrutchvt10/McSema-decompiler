@@ -6,6 +6,11 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 endif ()
 
+# default install prefix
+if ("${CMAKE_INSTALL_PREFIX}" STREQUAL "")
+    set(CMAKE_INSTALL_PREFIX "/usr")
+endif ()
+
 #
 # compiler and linker flags
 #
@@ -13,6 +18,9 @@ endif ()
 # enable c++11 for all targets
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# add the BC language handler used to compile bitcode
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/BCCompiler)
 
 # warnings and compiler settings (todo: add -Wall, -Wextra, -Wconversion)
 set(GLOBAL_CXXWARNINGS "-pedantic -Wno-unused-parameter -Wno-c++98-compat -Wno-unreachable-code-return -Wno-nested-anon-types -Wno-extended-offsetof -Wno-gnu-anonymous-struct -Wno-gnu-designator -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-statement-expression -Wno-return-type-c-linkage -Wno-c99-extensions -Wno-ignored-attributes -Wno-unused-local-typedef")

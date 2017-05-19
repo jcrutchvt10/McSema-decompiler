@@ -1,23 +1,12 @@
-# manually list every file that goes into the semantics targets.
-# There are ways to do a glob(),but they require cmake to be manually 
-# re-run.
-# This method is the recommended approach for adding multiple source files
-set(SEMANTICS_TARGETS
-    FXAM.cpp
-    )
+cmake_minimum_required (VERSION 3.2)
+project(x86_bitcode BC)
 
-add_bitcode(
-    mcsema_semantics_x86
-    "-m32"
-    ${SEMANTICS_TARGETS})
-install(
-    FILES $<TARGET_PROPERTY:mcsema_semantics_x86,LOCATION>
-    DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+add_runtime(mcsema_semantics_x86 SOURCES "FXAM.cpp" ADDRESS_SIZE 32)
+target_compile_options(mcsema_semantics_x86 PRIVATE "-m32")
+target_include_directories(mcsema_semantics_x86 PRIVATE "${CMAKE_SOURCE_DIR}")
 
-add_bitcode(
-    mcsema_semantics_amd64
-    "-m64"
-    ${SEMANTICS_TARGETS})
-install(
-    FILES $<TARGET_PROPERTY:mcsema_semantics_amd64,LOCATION>
-    DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+add_runtime(mcsema_semantics_amd64 SOURCES "FXAM.cpp" ADDRESS_SIZE 64)
+target_compile_options(mcsema_semantics_amd64 PRIVATE "-m64")
+target_include_directories(mcsema_semantics_amd64 PRIVATE "${CMAKE_SOURCE_DIR}")
+
+install(TARGETS mcsema_semantics_x86 mcsema_semantics_amd64 DESTINATION "share/mcsema/bitcode")

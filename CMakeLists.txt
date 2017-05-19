@@ -39,8 +39,6 @@ endif ()
 list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${LLVM_PRIVATE_HEADERS_BASE_PATH}")
 list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${LLVM_PRIVATE_HEADERS_BASE_PATH}/llvm/lib/Target/X86")
 
-include(LLVMUtils)
-
 # protobuf
 find_package(Protobuf REQUIRED)
 list(APPEND PROJECT_LIBRARIES ${Protobuf_LIBRARIES})
@@ -56,13 +54,13 @@ list(APPEND PROJECT_DEFINITIONS "GOOGLE_PROTOBUF_NO_RTTI")
 git_describe(MCSEMA_VERSION_STRING)
 git_get_branch(MCSEMA_BRANCH_NAME)
 
-if(NOT MCSEMA_VERSION_STRING)
+if (NOT MCSEMA_VERSION_STRING)
     set(MCSEMA_VERSION_STRING "unknown")
-endif()
+endif ()
 
-if(NOT MCSEMA_BRANCH_NAME)
+if (NOT MCSEMA_BRANCH_NAME)
     set(MCSEMA_BRANCH_NAME "unknown")
-endif()
+endif ()
 
 configure_file("mcsema/Version.h.in" "${CMAKE_BINARY_DIR}/mcsema_version.h")
 
@@ -148,14 +146,14 @@ target_link_libraries(mcsema-lift PRIVATE ${PROJECT_LIBRARIES})
 # make sure the python module is generated
 add_dependencies(mcsema-lift protobuf_python_module)
 
+# also add the Runtime and Bitcode targets
+add_subdirectory(mcsema/Arch/X86/Runtime)
+add_subdirectory(mcsema/Arch/X86/Semantics/Bitcode)
+
 #
 # install directives
 #
 
-install(
-    TARGETS mcsema-lift 
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION lib
-)
-
-install(FILES "${PROJECT_PROTOBUFPYTHONMODULE}" DESTINATION "${CMAKE_SOURCE_DIR}/tools/mcsema_disass/ida")
+install(TARGETS mcsema-lift DESTINATION "bin")
+install(DIRECTORY "tools/mcsema_disass" DESTINATION "share/mcsema")
+install(FILES "${PROJECT_PROTOBUFPYTHONMODULE}" DESTINATION "share/mcsema/mcsema_disass/ida")
