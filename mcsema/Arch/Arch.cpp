@@ -8,7 +8,13 @@
 
 #include <llvm/MC/MCAsmInfo.h>
 #include <llvm/MC/MCContext.h>
-#include <llvm/MC/MCDisassembler.h>
+
+#if MCSEMA_LLVMVERSION >= 391
+  #include <llvm/MC/Disassembler.h>
+#else
+  #include <llvm/MC/MCDisassembler.h>
+#endif
+
 #include <llvm/MC/MCInstPrinter.h>
 
 #include <llvm/lib/Target/X86/X86RegisterInfo.h>
@@ -182,10 +188,10 @@ bool InitArch(llvm::LLVMContext *context, const std::string &os, const std::stri
     return false;
   }
 
-  llvm::InitializeAllTargetInfos();
-  llvm::InitializeAllTargetMCs();
-  llvm::InitializeAllAsmParsers();
-  llvm::InitializeAllDisassemblers();
+  LLVMInitializeX86TargetInfo();
+  LLVMInitializeX86TargetMC();
+  LLVMInitializeX86AsmParser();
+  LLVMInitializeX86Disassembler();
 
   if (arch == "x86" || arch == "amd64") {
     X86InitRegisterState(context);

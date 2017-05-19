@@ -752,8 +752,7 @@ GENERIC_TRANSLATION(REP_STOSD_32, (doRepStos<32, 32>(block)))
     } \
     return ret ;\
 }
-//	ret = doScas<WIDTH>(block); \
-
+//	ret = doScas<WIDTH>(block);
 
 #define CMPS_TRANSLATION(NAME, WIDTH) \
     static InstTransResult translate_ ## NAME ( \
