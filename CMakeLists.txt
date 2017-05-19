@@ -155,5 +155,8 @@ add_subdirectory(mcsema/Arch/X86/Semantics/Bitcode)
 #
 
 install(TARGETS mcsema-lift DESTINATION "bin")
-install(DIRECTORY "tools/mcsema_disass" DESTINATION "share/mcsema")
+
+# prepare the plugin installer
+install(DIRECTORY "tools/mcsema_disass" DESTINATION "share/mcsema/ida_plugin_installer")
+install(FILES "tools/setup.py" DESTINATION "share/mcsema/ida_plugin_installer")
 install(FILES "${PROJECT_PROTOBUFPYTHONMODULE}" DESTINATION "share/mcsema/mcsema_disass/ida")

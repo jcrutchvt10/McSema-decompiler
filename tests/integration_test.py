@@ -23,6 +23,18 @@ def b64(f):
         return base64.b64encode(infile.read())
 
 class LinuxTest(unittest.TestCase):
+    """ Returns the install prefix
+    """
+    def getInstallPrefix(self):
+        install_prefix = os.environ['MCSEMA_INSTALL_PREFIX']
+        if len(install_prefix) == 0:
+            if platform.system().lower() == "windows":
+                install_prefix = "C:\\mcsema"
+            else:
+                install_prefix = "/usr"
+
+        return install_prefix
+
     """ Test translating CFGs created from Linux binaries 
         When this test runs on Linux, it will also attempt to
         rebuild the bitcode to new, and to run the new binaries.
@@ -46,7 +58,7 @@ class LinuxTest(unittest.TestCase):
 
         self.my_dir = os.path.dirname(__file__)
         self.mcsema_lift = os.path.realpath(
-            os.path.join(self.my_dir, "..", "bin", binary_name("mcsema-lift")))
+            os.path.join(self.getInstallPrefix(), "bin", binary_name("mcsema-lift")))
 
         if self.on_test_os:
             # we can only rebuild binaries if we are running on the same OS
@@ -58,13 +70,13 @@ class LinuxTest(unittest.TestCase):
                     self.configs[arch] = json.load(jsonfile)
 
             try:
-                clang_file = subprocess.check_output(["which", "clang-3.8"])
+                clang_file = subprocess.check_output(["which", "clang"])
                 self.clang = clang_file.strip()
             except OSError as oe:
-                sys.stderr.write("Could not find clang-3.8: {}\n".format(str(oe)))
+                sys.stderr.write("Could not find clang: {}\n".format(str(oe)))
                 raise oe
             except subprocess.CalledProcessError as ce:
-                sys.stderr.write("Could not find clang-3.8: {}\n".format(str(ce)))
+                sys.stderr.write("Could not find clang: {}\n".format(str(ce)))
                 raise ce
 
 
@@ -136,10 +148,10 @@ class LinuxTest(unittest.TestCase):
             "x86": "mcsema_semantics_x86.bc", }
 
         runtime_lib = os.path.realpath(
-            os.path.join(self.my_dir, "..", "lib", arch_lib_name[arch]))
+            os.path.join(self.getInstallPrefix(), "lib", arch_lib_name[arch]))
 
         bitcode_lib = os.path.realpath(
-            os.path.join(self.my_dir, "..", "lib", arch_bitcode_name[arch]))
+            os.path.join(self.getInstallPrefix(), "share", "mcsema", "bitcode", arch_bitcode_name[arch]))
 
         flags = {
             "amd64": "-m64",

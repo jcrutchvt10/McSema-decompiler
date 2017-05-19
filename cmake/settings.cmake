@@ -6,10 +6,15 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 endif ()
 
-# default install prefix
-if ("${CMAKE_INSTALL_PREFIX}" STREQUAL "")
+# overwrite the default install prefix
+if ("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
     set(CMAKE_INSTALL_PREFIX "/usr")
+
+elseif ("${CMAKE_INSTALL_PREFIX}" STREQUAL "c:/Program Files")
+    set(CMAKE_INSTALL_PREFIX "C:/mcsema")
 endif ()
+
+message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
 
 #
 # compiler and linker flags
