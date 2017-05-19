@@ -11,7 +11,24 @@ include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
 #
 
 # llvm
-find_package(LLVM ${FORCE_LLVM_VERSION} REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
+set(MCSEMA_SUPPORTEDLLVMVERSIONS
+    "4.0"
+    "3.9"
+    "3.8"
+)
+
+foreach (llvm_version ${MCSEMA_SUPPORTEDLLVMVERSIONS})
+    find_package(LLVM ${llvm_version} CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
+    if (LLVM_FOUND)
+        break ()
+    endif ()
+endforeach ()
+
+if (NOT LLVM_FOUND)
+    message(STATUS "No suitable LLVM version found")
+endif ()
+
+message(STATUS "Found LLVM version ${LLVM_PACKAGE_VERSION}")
 
 if (${LLVM_PACKAGE_VERSION} VERSION_LESS "3.9.0")
     set(LLVM_LIBRARIES 
