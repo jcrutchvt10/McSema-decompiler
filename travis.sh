@@ -5,6 +5,14 @@ function main
 {
     local install_prefix="mcsema_binaries"
 
+    BuildLLVM
+    if [ $? -ne 0 ] ; then
+        printf "Failed to install LLVM"
+        return 1
+    fi
+
+    export FINDPACKAGE_LLVM_HINTS=`realpath build/llvm`
+
     CompileMcSema "${install_prefix}"
     if [ $? -ne 0 ] ; then
         printf "McSema could not be compiled. Aborting...\n"

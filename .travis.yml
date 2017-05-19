@@ -2,6 +2,9 @@ cache:
   timeout: 660
   pip: true
   custom_install: true
+  directories:
+    - build/llvm
+    - third_party/llvm
 
 matrix:
     include:
@@ -14,15 +17,15 @@ matrix:
           sudo: required
 
 before_install:
- - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get -qq update          ; fi
+ - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get -qq update ; fi
  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install -qqy libxml2-dev git cmake libprotoc-dev libprotobuf-dev libprotobuf-dev protobuf-compiler python2.7 python-pip llvm-3.8 clang-3.8 realpath gcc-multilib; fi
  - sudo -H pip install 'protobuf==2.6.1'
- - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update                        ; fi
+ - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update ; fi
  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-3.8 100 ; sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-3.8 100 ; sudo update-alternatives --install /usr/include/llvm llvm /usr/include/llvm-3.8 100 ; fi
 install: true
 script:
- - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./run_tests.sh ; fi
- - if [[ "$TRAVIS_OS_NAME" == "osx" ]];   then ./run_tests.sh ; fi
+ - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./travis.sh ; fi
+ - if [[ "$TRAVIS_OS_NAME" == "osx" ]];   then ./travis.sh ; fi
 notifications:
   slack:
     secure: g1Nm7C7TYKg4RjDJ5cwuEcgKXfOAmVOu51adTPLBLGzZcCbCrkwQgI39ZycsalaACSnC8iNvqSCbRfZIA5mkDZ7VADaiZgLoWjq3RQzJmWgwGhhtyRkbtiicBnowTL5hIEiMOv6RnKlbB7M2OwzRiS07+FQXrK24hz+qm6zPptw=

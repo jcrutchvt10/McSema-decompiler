@@ -9,6 +9,12 @@ function main
         local install_prefix="/usr"
     fi
 
+    InstallDependencies
+    if [ $? -ne 0 ] ; then
+        printf "Failed to install the system dependencies\n"
+        return 1
+    fi
+
     CompileMcSema "${install_prefix}"
     if [ $? -ne 0 ] ; then
         printf "McSema could not be compiled. Aborting...\n"
@@ -59,4 +65,3 @@ function main
 
 main $@
 exit $?
-

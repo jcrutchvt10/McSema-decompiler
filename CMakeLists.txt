@@ -11,6 +11,10 @@ include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
 #
 
 # llvm
+if (DEFINED ENV{FINDPACKAGE_LLVM_HINTS})
+    set(FINDPACKAGE_LLVM_HINTS $ENV{FINDPACKAGE_LLVM_HINTS})
+endif ()
+
 set(MCSEMA_SUPPORTEDLLVMVERSIONS
     "4.0"
     "3.9"
