@@ -175,6 +175,9 @@ def install_windows_deps():
     else:
         llvm_setup_link = "http://releases.llvm.org/3.8.1/LLVM-" + llvm_setup_vers + "-win32.exe"
 
+    llvm_src_vers = llvm_setup_vers
+    llvm_src_link = "http://releases.llvm.org/" + llvm_src_vers + "/llvm-" + llvm_src_vers + ".src.tar.xz"
+
     #
     # visual studio tests
     #
@@ -260,9 +263,6 @@ def install_windows_deps():
 
         output = proc.communicate()[0]
         if proc.returncode != 0:
-            if not output:
-                output = "Failed to extract the protobuf package"
-
             print(output)
             return False
 
@@ -356,14 +356,68 @@ def install_windows_deps():
 
         output = proc.communicate()[0]
         if proc.returncode != 0:
-            if not output:
-                output = "Failed to extract the LLVM installer"
-
             print(output)
             return False
 
     # the binary distribution we have downloaded does not contain
     # llvm-link; we need to build it ourselves
+    if spawn.find_executable("llvm-link.exe") is None:
+        # download and extract the source code
+        if not pshell_download_file(llvm_src_link, "llvm.src.tar.xz"):
+            return False
+
+        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-y", "llvm.src.tar.xz"],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
+
+        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-o", "third-party", "-y",
+                                 "llvm.src.tar"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
+
+        src_folder_name = "llvm-" + llvm_src_vers + ".src"
+        os.rename(os.path.join("third-party", src_folder_name), os.path.join("third-party", "llvm"))
+
+        # run cmake
+        llvm_src_folder = os.path.realpath(os.path.join("third-party", "llvm"))
+        llvm_build_folder = os.path.realpath(os.path.join("build", "llvm"))
+        source_folder = os.path.realpath(".")
+
+        if not os.path.isdir(llvm_build_folder):
+            os.mkdir(llvm_build_folder)
+
+        proc = subprocess.Popen([cmake_path, "-G", vsbuild, "-DCMAKE_INSTALL_PREFIX=" +
+                                 source_folder, "-DLLVM_TARGETS_TO_BUILD=X86",
+                                 "-DLLVM_INCLUDE_EXAMPLES=OFF", "-DLLVM_INCLUDE_TESTS=OFF",
+                                 "-DCMAKE_BUILD_TYPE=Release", llvm_src_folder],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                cwd=llvm_build_folder)
+
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
+
+        processor_count = os.environ["NUMBER_OF_PROCESSORS"]
+        if not processor_count or not processor_count.isdigit():
+            processor_count = "4"
+
+        proc = subprocess.Popen([cmake_path, "--build", ".", "--config", "Release", "--target",
+                                 "install", "--maxcpucount:" + processor_count,
+                                 "/p:BuildInParallel=true"], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, cwd=llvm_build_folder)
+
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
 
     return True
 
