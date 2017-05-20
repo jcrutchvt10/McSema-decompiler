@@ -3,6 +3,8 @@
 import sys
 import platform
 import subprocess
+import argparse
+import os
 from distutils import spawn
 
 def get_platform_type():
@@ -94,12 +96,103 @@ def install_linux_ubuntu_deps():
             print(output)
             return False
 
+    # we have to download a pre-built llvm package because the one in the repository
+    # is broken
+    # todo: download and extract the llvm tarball
+
+    return True
+
+def get_pshell_download_command(link, file_name):
+    """
+    Builds a powershell command string that can be used to download a file
+    """
+
+    if not link or not file_name:
+        return None
+
+    command = "(new-object System.Net.WebClient).DownloadFile('"
+    command = command + link
+
+    command = command + "','"
+    command = command + file_name
+    command = command + "')"
+
+    return command
+
+def pshell_download_file(link, file_name):
+    """
+    Downloads a file using a powershell script
+    """
+
+    pshell_command = get_pshell_download_command(link, file_name)
+    if pshell_command == None:
+        return False
+
+    process = subprocess.Popen(["powershell", "-Command", pshell_command],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    output = process.communicate()[0]
+    if process.returncode != 0:
+        if not output:
+            output = "Failed to download the 7-zip installer"
+
+        print(output)
+        return False
+
+    return True
+
+def install_msi_package(msi_path, installed_executable_path):
+    if not msi_path or not installed_executable_path:
+        return False
+
+    process = subprocess.Popen(["msiexec", "/passive", "/i", msi_path],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    output = process.communicate()[9]
+    if process.returncode != 0 or not os.path.isfile(installed_executable_path):
+        if not output:
+            output = "Failed to install " + msi_path
+
+        print(output)
+        return False
+
     return True
 
 def install_windows_deps():
     """
     Installs the requires Windows components.
     """
+
+    # external links
+    p7zip_msi_link = "http://www.7-zip.org/a/7z1604.msi"
+    cmake_msi_link = "https://cmake.org/files/v3.8/cmake-3.8.1-win32-x86.msi"
+
+    # 7-zip
+    sevenzip_path = os.path.join("C:", "Program Files", "7-zip", "7z.exe")
+    if not os.path.isfile(sevenzip_path):
+        sevenzip_path = os.path.join("C:", "Program Files (x86)", "7-zip", "7z.exe")
+        if not os.path.isfile(sevenzip_path):
+            print("Installing package: 7zip")
+
+            if not pshell_download_file(p7zip_msi_link, "7z_installer.msi"):
+                return False
+
+            if not install_msi_package("7z_installer.msi", sevenzip_path):
+                return False
+
+    # cmake
+    cmake_path = os.path.join("C:", "Program Files", "CMake", "bin", "cmake.exe")
+    if not os.path.isfile(cmake_path):
+        cmake_path = os.path.join("C:", "Program Files (x86)", "CMake", "bin", "cmake.exe")
+        if not os.path.isfile(cmake_path):
+            print("Installing package: CMake")
+
+            if not pshell_download_file(cmake_msi_link, "cmake_installer.msi"):
+                return False
+
+            if not install_msi_package("cmake_installer.msi", cmake_path):
+                return False
+
     return True
 
 def install_osx_deps():
@@ -179,6 +272,10 @@ def install_dependencies():
     return exit_status
 
 def main():
+    """
+    This function will install the required dependencies and install mcsema
+    """
+
     if not install_dependencies():
         print("Failed to install the system dependencies. Exiting...")
         return False
