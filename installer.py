@@ -637,6 +637,9 @@ def main():
 
         print("All tests have reported success!")
 
+    else:
+        print("Skipping tests...")
+
     return True
 
 if __name__ == "__main__":
