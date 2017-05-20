@@ -37,6 +37,7 @@ generated/*
 .idea
 CMakeLists.txt.user
 mcsema_binaries
+mcsema_build
 
 tools/build/*
 tools/dist/*

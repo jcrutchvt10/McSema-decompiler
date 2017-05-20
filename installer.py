@@ -530,6 +530,8 @@ def main():
                             action="store_true")
 
     arg_parser.add_argument("--prefix", help="install prefix")
+    arg_parser.add_argument("--run-tests", help="also run the integration tests",
+                            action="store_true")
 
     arguments = arg_parser.parse_args()
 
@@ -624,6 +626,16 @@ def main():
 
     if platform_type == "linux" or platform_type == "osx":
         subprocess.call(["sudo", "-K"])
+
+    if arguments.run_tests:
+        print("Running tests...")
+
+        os.environ['MCSEMA_INSTALL_PREFIX'] = arguments.prefix
+        if subprocess.call(["python2", "tests/integration_test.py"]) != 0:
+            print("One or more tests have failed! Exiting with error...")
+            return False
+
+        print("All tests have reported success!")
 
     return True
 
