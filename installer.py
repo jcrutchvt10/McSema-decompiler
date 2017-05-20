@@ -156,6 +156,30 @@ def install_msi_package(msi_path, installed_executable_path):
 
     return True
 
+def get_cmake_path():
+    """
+    Returns the cmake path
+    """
+
+    platform_type = get_platform_type()
+
+    if platform_type == "windows":
+        cmake_path = os.path.join("C:", "Program Files", "CMake", "bin", "cmake.exe")
+        if os.path.isfile(cmake_path):
+            return cmake_path
+
+        cmake_path = os.path.join("C:", "Program Files (x86)", "CMake", "bin", "cmake.exe")
+        if os.path.isfile(cmake_path):
+            return cmake_path
+
+        return None
+
+    elif platform_type == "linux" or platform_type == "osx":
+        return spawn.find_executable("cmake")
+
+    else:
+        return None
+
 def install_windows_deps():
     """
     Installs the requires Windows components.
@@ -236,17 +260,16 @@ def install_windows_deps():
     # cmake
     #
 
-    cmake_path = os.path.join("C:", "Program Files", "CMake", "bin", "cmake.exe")
-    if not os.path.isfile(cmake_path):
+    cmake_path = get_cmake_path()
+    if cmake_path is None:
+        print("Installing package: CMake")
+
+        if not pshell_download_file(cmake_msi_link, "cmake_installer.msi"):
+            return False
+
         cmake_path = os.path.join("C:", "Program Files (x86)", "CMake", "bin", "cmake.exe")
-        if not os.path.isfile(cmake_path):
-            print("Installing package: CMake")
-
-            if not pshell_download_file(cmake_msi_link, "cmake_installer.msi"):
-                return False
-
-            if not install_msi_package("cmake_installer.msi", cmake_path):
-                return False
+        if not install_msi_package("cmake_installer.msi", cmake_path):
+            return False
 
     #
     # protobuf
@@ -502,9 +525,105 @@ def main():
     This function will install the required dependencies and install mcsema
     """
 
-    if not install_dependencies():
-        print("Failed to install the system dependencies. Exiting...")
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument("--install-deps", help="install required dependencies",
+                            action="store_true")
+
+    arg_parser.add_argument("--prefix", help="install prefix")
+
+    arguments = arg_parser.parse_args()
+
+    if arguments.install_deps:
+        print("Looking for missing dependencies...")
+
+        if not install_dependencies():
+            print("Failed to install the system dependencies. Exiting...")
+            return False
+
+        print("All required dependencies appear to be installed")
+
+    else:
+        print("Skipping the dependency installer...")
+
+    install_prefix = arguments.prefix
+    if install_prefix is None:
+        platform_type = get_platform_type()
+        if platform_type == "linux" or platform_type == "osx":
+            install_prefix = "/usr"
+
+        elif platform_type == "windows":
+            install_prefix = os.path.join("C:", "mcsema")
+
+        else:
+            print("Unrecognized platform. Aborting...")
+            return False
+
+    print("Install prefix: " + install_prefix)
+
+    if not os.path.isdir("mcsema_build"):
+        os.mkdir("mcsema_build")
+
+    mcsema_build_folder = os.path.realpath("mcsema_build")
+
+    print("Build folder: " + mcsema_build_folder)
+
+    cmake_path = get_cmake_path()
+    if cmake_path is None:
+        print("Failed to locate cmake")
         return False
+
+    print("CMake path: " + cmake_path)
+
+    # todo: add windows variables
+    # todo: ubuntu should use the pre-built tarball
+    print("Configuring McSema...")
+
+    source_folder = os.path.realpath(".")
+    process = subprocess.Popen([cmake_path, "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+                                "-DCMAKE_VERBOSE_MAKEFILE=True",
+                                "-DCMAKE_INSTALL_PREFIX=" + install_prefix, source_folder],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               cwd=mcsema_build_folder)
+
+    output = process.communicate()[0]
+    if process.returncode != 0:
+        print(output)
+        return False
+
+    print("Building McSema...")
+    process = subprocess.Popen([cmake_path, "--build", ".", "--", "-j", "4"],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               cwd=mcsema_build_folder)
+
+    output = process.communicate()[0]
+    if process.returncode != 0:
+        print(output)
+        return False
+
+    print("Installing McSema...")
+
+    cmake_command = []
+
+    platform_type = get_platform_type()
+    if platform_type == "linux" or platform_type == "osx":
+        cmake_command.append("sudo")
+
+    cmake_command.append(cmake_path)
+    cmake_command.append("--build")
+    cmake_command.append(".")
+    cmake_command.append("--target")
+    cmake_command.append("install")
+
+    process = subprocess.Popen(cmake_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               cwd=mcsema_build_folder)
+
+    output = process.communicate()[0]
+    if process.returncode != 0:
+        print(output)
+        return False
+
+    if platform_type == "linux" or platform_type == "osx":
+        subprocess.call(["sudo", "-K"])
 
     return True
 
