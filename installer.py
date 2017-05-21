@@ -231,21 +231,12 @@ def install_windows_deps():
         os.mkdir(build_folder_path)
 
     # unsupported clang versions will trigger the automatic downloader
-    supported_clang_versions = ["3.8.0", "3.8.1", "3.9.0", "4.0.0"]
+    supported_clang_versions = ["3.8.1", "3.9.0", "4.0.0"]
 
     # external links
     p7zip_msi_link = "http://www.7-zip.org/a/7z1604.msi"
     cmake_msi_link = "https://cmake.org/files/v3.8/cmake-3.8.1-win32-x86.msi"
     protobuf_zip_link = "https://github.com/google/protobuf/releases/download/v2.6.1/protobuf-2.6.1.zip"
-
-    llvm_setup_vers = "3.8.1"
-    if platform.machine().endswith('64'):
-        llvm_setup_link = "http://releases.llvm.org/3.8.1/LLVM-" + llvm_setup_vers + "-win64.exe"
-    else:
-        llvm_setup_link = "http://releases.llvm.org/3.8.1/LLVM-" + llvm_setup_vers + "-win32.exe"
-
-    llvm_src_vers = llvm_setup_vers
-    llvm_src_link = "http://releases.llvm.org/" + llvm_src_vers + "/llvm-" + llvm_src_vers + ".src.tar.xz"
 
     #
     # visual studio tests
@@ -266,6 +257,7 @@ def install_windows_deps():
         print(output)
         return False
 
+    # detect the vs version
     vsbuild = "unknown"
     vstoolset = "unknown"
 
@@ -277,7 +269,7 @@ def install_windows_deps():
     elif "Version 19" in output:
         vsbuild = "Visual Studio 14 2015"
         vstoolset = "llvm-vs2014"
-        
+
     if vstoolset != "unknown" and platform.machine().endswith('64'):
         vstoolset = vstoolset + " Win64"
 
@@ -412,7 +404,11 @@ def install_windows_deps():
     # the version, just make sure it is installed
     clangcl_path = spawn.find_executable("clang-cl.exe")
     if clangcl_path is None:
-        print("Please install Clang for Visual Studio")
+        print("Please install Clang for Windows.")
+        print("Instructions:")
+        print("Download page: http://releases.llvm.org/download.html")
+        print("Run the installer and add it to the PATH")
+        print("Open the LLVM install folder and run tools/msbuild/install.bat")
         return False
 
     # we also need the full installation of a compatible clang to correctly generate bitcode
@@ -433,60 +429,72 @@ def install_windows_deps():
         return False
 
     clang_version = clang_version[2]
+    print("Found clang version " + clang_version)
     if clang_version not in supported_clang_versions:
-        # download a binary distribution of LLVM/Clang
-        print("Fetching package: LLVM/Clang " + llvm_setup_vers)
+        print("Unsupported clang version found.")
 
-        if not pshell_download_file(llvm_setup_link, "llvm_setup.exe"):
-            return False
+        print("Valid versions:")
+        for version in supported_clang_versions:
+            print("  " + version)
 
-        llvm_folder = os.path.join("third_party", "CLANG_38")
-        clang_path = os.path.join("third_party", "CLANG_38.exe")
+        return False
 
-        proc = subprocess.Popen([sevenzip_path, "-bd", "-o" + llvm_folder, "x", "-y", clang_path],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    # sadly, llvm-link is not shipped; we'll have to compile our own
+    llvm_src_link = "http://releases.llvm.org/" + clang_version + "/llvm-" + clang_version + ".src.tar.xz"
 
-        output = proc.communicate()[0]
-        if proc.returncode != 0:
-            print(output)
-            return False
+    llvm_install_folder = os.path.realpath(os.path.join(build_folder_path,
+                                                        "llvm-install"))
 
-    # the binary distribution we have downloaded does not contain
-    # llvm-link; we need to build it ourselves
+    if os.path.isdir(llvm_install_folder):
+        os.environ["PATH"] = os.environ["PATH"] + ";" + os.path.join(llvm_install_folder, "bin")
+
     if spawn.find_executable("llvm-link.exe") is None:
+        print("llvm-link.exe was not found in PATH.")
+
+        llvm_build_folder = os.path.realpath(os.path.join(build_folder_path, "llvm-build"))
+
         # download and extract the source code
-        if not pshell_download_file(llvm_src_link, "llvm.src.tar.xz"):
+        # attempt to match the version of the clang we have found
+        print("Downloading package: LLVM (" + clang_version + ")")
+
+        llvm_source_tarball = os.path.realpath(os.path.join(build_folder_path,
+                                                            "llvm.src.tar.xz"))
+
+        if not pshell_download_file(llvm_src_link, llvm_source_tarball):
             return False
 
-        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-y", "llvm.src.tar.xz"],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        print("Extracting package: LLVM")
+        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-y", llvm_source_tarball],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                cwd=build_folder_path)
 
         output = proc.communicate()[0]
         if proc.returncode != 0:
             print(output)
             return False
 
-        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-o", "third-party", "-y",
-                                 "llvm.src.tar"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        llvm_source_tarball = os.path.realpath(os.path.join(build_folder_path,
+                                                            "llvm.src.tar"))
+
+        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-y", llvm_source_tarball],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                cwd=build_folder_path)
 
         output = proc.communicate()[0]
         if proc.returncode != 0:
             print(output)
             return False
 
-        src_folder_name = "llvm-" + llvm_src_vers + ".src"
-        os.rename(os.path.join("third-party", src_folder_name), os.path.join("third-party", "llvm"))
+        llvm_src_folder = os.path.realpath(os.path.join(build_folder_path, "llvm-" + clang_version + ".src"))
 
         # run cmake
-        llvm_src_folder = os.path.realpath(os.path.join("third-party", "llvm"))
-        llvm_build_folder = os.path.realpath(os.path.join("build", "llvm"))
-        source_folder = os.path.realpath(".")
+        print("Configuring package: LLVM")
 
         if not os.path.isdir(llvm_build_folder):
             os.mkdir(llvm_build_folder)
 
         proc = subprocess.Popen([cmake_path, "-G", vsbuild, "-DCMAKE_INSTALL_PREFIX=" +
-                                 source_folder, "-DLLVM_TARGETS_TO_BUILD=X86",
+                                 llvm_install_folder, "-DLLVM_TARGETS_TO_BUILD=X86",
                                  "-DLLVM_INCLUDE_EXAMPLES=OFF", "-DLLVM_INCLUDE_TESTS=OFF",
                                  "-DCMAKE_BUILD_TYPE=Release", llvm_src_folder],
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -497,12 +505,14 @@ def install_windows_deps():
             print(output)
             return False
 
+        print("Building package: LLVM")
+
         processor_count = os.environ["NUMBER_OF_PROCESSORS"]
         if not processor_count or not processor_count.isdigit():
             processor_count = "4"
 
         proc = subprocess.Popen([cmake_path, "--build", ".", "--config", "Release", "--target",
-                                 "install", "--maxcpucount:" + processor_count,
+                                 "install", "--", "/maxcpucount:" + processor_count,
                                  "/p:BuildInParallel=true"], stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, cwd=llvm_build_folder)
 
@@ -642,8 +652,6 @@ def main():
     if cmake_path is None:
         print("Failed to locate cmake")
         return False
-
-    print("CMake path: " + cmake_path)
 
     # todo: add windows variables
     # todo: ubuntu should use the pre-built tarball
