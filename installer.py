@@ -15,10 +15,10 @@ def get_platform_type():
     if sys.platform == "linux" or sys.platform == "linux2":
         return "linux"
 
-    elif platform == "darwin":
+    elif sys.platform == "darwin":
         return "osx"
 
-    elif platform == "win32":
+    elif sys.platform == "win32" or sys.platform == "cygwin":
         return "windows"
 
     else:
@@ -156,6 +156,22 @@ def install_msi_package(msi_path, installed_executable_path):
 
     return True
 
+def get_python_path():
+    """
+    Returns the python path
+    """
+
+    platform_type = get_platform_type()
+
+    if platform_type == "windows":
+        return spawn.find_executable("python.exe")
+
+    elif platform_type == "linux" or platform_type == "osx":
+        return spawn.find_executable("python")
+
+    else:
+        return None
+
 def get_cmake_path():
     """
     Returns the cmake path
@@ -164,11 +180,11 @@ def get_cmake_path():
     platform_type = get_platform_type()
 
     if platform_type == "windows":
-        cmake_path = os.path.join("C:", "Program Files", "CMake", "bin", "cmake.exe")
+        cmake_path = os.path.join("C:\\", "Program Files", "CMake", "bin", "cmake.exe")
         if os.path.isfile(cmake_path):
             return cmake_path
 
-        cmake_path = os.path.join("C:", "Program Files (x86)", "CMake", "bin", "cmake.exe")
+        cmake_path = os.path.join("C:\\", "Program Files (x86)", "CMake", "bin", "cmake.exe")
         if os.path.isfile(cmake_path):
             return cmake_path
 
@@ -180,10 +196,39 @@ def get_cmake_path():
     else:
         return None
 
+def get_7zip_path():
+    """
+    Returns the 7zip path
+    """
+
+    platform_type = get_platform_type()
+
+    if platform_type == "windows":
+        p7zip_path = os.path.join("C:\\", "Program Files", "7-Zip", "7z.exe")
+        if os.path.isfile(p7zip_path):
+            return p7zip_path
+
+        p7zip_path = os.path.join("C:\\", "Program Files (x86)", "7-Zip", "7z.exe")
+        if os.path.isfile(p7zip_path):
+            return p7zip_path
+
+        print "error"
+        return None
+
+    elif platform_type == "linux" or platform_type == "osx":
+        return spawn.find_executable("7z")
+
+    else:
+        return None
+
 def install_windows_deps():
     """
     Installs the requires Windows components.
     """
+
+    build_folder_path = os.path.realpath("build")
+    if not os.path.isdir(build_folder_path):
+        os.mkdir(build_folder_path)
 
     # unsupported clang versions will trigger the automatic downloader
     supported_clang_versions = ["3.8.0", "3.8.1", "3.9.0", "4.0.0"]
@@ -214,9 +259,9 @@ def install_windows_deps():
     process = subprocess.Popen(["cl.exe", "/?"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     output = process.communicate()[0]
-    if process.returncode != 0 or not os.path.isfile(installed_executable_path):
+    if process.returncode != 0:
         if not output:
-            output = "Failed to install " + msi_path
+            output = "Failed to install execute the Visual Studio compiler"
 
         print(output)
         return False
@@ -244,17 +289,16 @@ def install_windows_deps():
     # 7-zip
     #
 
-    sevenzip_path = os.path.join("C:", "Program Files", "7-zip", "7z.exe")
-    if not os.path.isfile(sevenzip_path):
-        sevenzip_path = os.path.join("C:", "Program Files (x86)", "7-zip", "7z.exe")
-        if not os.path.isfile(sevenzip_path):
-            print("Installing package: 7zip")
+    sevenzip_path = get_7zip_path()
+    if sevenzip_path is None:
+        print("Downloading package: 7zip")
+        if not pshell_download_file(p7zip_msi_link, os.path.join(build_folder_path,
+                                                                 "7z_installer.msi")):
+            return False
 
-            if not pshell_download_file(p7zip_msi_link, "7z_installer.msi"):
-                return False
-
-            if not install_msi_package("7z_installer.msi", sevenzip_path):
-                return False
+        print("Installing package: 7zip")
+        if not install_msi_package("7z_installer.msi", sevenzip_path):
+            return False
 
     #
     # cmake
@@ -262,12 +306,13 @@ def install_windows_deps():
 
     cmake_path = get_cmake_path()
     if cmake_path is None:
-        print("Installing package: CMake")
-
-        if not pshell_download_file(cmake_msi_link, "cmake_installer.msi"):
+        print("Downloading package: CMake")
+        if not pshell_download_file(cmake_msi_link, os.path.join(build_folder_path,
+                                                                 "cmake_installer.msi")):
             return False
 
-        cmake_path = os.path.join("C:", "Program Files (x86)", "CMake", "bin", "cmake.exe")
+        print("Installing package: CMake")
+        cmake_path = os.path.join("C:\\", "Program Files (x86)", "CMake", "bin", "cmake.exe")
         if not install_msi_package("cmake_installer.msi", cmake_path):
             return False
 
@@ -276,64 +321,85 @@ def install_windows_deps():
     #
 
     # native module
-    protobuf_folder = os.path.join("third-party", "protobuf")
-    if not os.path.isdir(protobuf_folder):
-        if not pshell_download_file(protobuf_zip_link, "protobuf.zip"):
+    protobuf_install_folder = os.path.realpath(os.path.join(build_folder_path, "protobuf-install"))
+
+    if not os.path.isdir(protobuf_install_folder):
+        print("Downloading package: protobuf")
+        if not pshell_download_file(protobuf_zip_link, os.path.join(build_folder_path,
+                                                                   "protobuf.zip")):
             return False
 
-        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-y", "protobuf.zip"],
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        print("Extracting package: protobuf (native module)")
+        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-y", os.path.join(build_folder_path,
+                                                                               "protobuf.zip")],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                cwd=build_folder_path)
 
         output = proc.communicate()[0]
         if proc.returncode != 0:
             print(output)
             return False
 
-    # todo: detect the folder automatically
-    protobuf_src_folder = os.path.realpath("protobuf-2.6.1")
-    protobuf_build_folder = os.path.realpath(os.path.join("third-party", "protobuf", "build"))
-    cmake_modules_folder = os.path.realpath("cmake")
+        # todo: detect the folder automatically
+        print("Configuring package: protobuf (native module)")
 
-    if not os.path.isdir(protobuf_build_folder):
-        if not os.mkdir(protobuf_build_folder):
-            print("Failed to create the protobuf build folder")
+        protobuf_src_folder = os.path.realpath(os.path.join(build_folder_path, "protobuf-2.6.1"))
+        protobuf_build_folder = os.path.realpath(os.path.join(build_folder_path, "protobuf-build"))
+        protobuf_cmake_project = os.path.realpath(os.path.join("windows", "protobuf_cmake_project"))
+
+        if not os.path.isdir(protobuf_build_folder):
+            try:
+                os.makedirs(protobuf_build_folder)
+            except:
+                print("Failed to create the protobuf build folder")
+                return False
+
+        os.environ["PROTOBUF_ROOT"] = protobuf_src_folder
+        proc = subprocess.Popen([cmake_path, "-G", vsbuild, "-DPROTOBUF_ROOT=" +
+                                 protobuf_src_folder, "-DCMAKE_INSTALL_PREFIX=" +
+                                 protobuf_install_folder, protobuf_cmake_project],
+                                cwd=protobuf_build_folder, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
+
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
             return False
 
-    proc = subprocess.Popen([cmake_path, "-G", vsbuild, "-DPROTOBUF_ROOT=" + protobuf_src_folder,
-                             "-DCMAKE_INSTALL_PREFIX=" + cmake_modules_folder, protobuf_src_folder],
-                            cwd=protobuf_build_folder, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
+        print("Building and installing package: protobuf (native module)")
+        proc = subprocess.Popen([cmake_path, "--build", ".", "--config", "Release", "--target",
+                                 "install"], cwd=protobuf_build_folder, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
 
-    output = proc.communicate()[0]
-    if proc.returncode != 0:
-        print(output)
-        return False
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
 
-    proc = subprocess.Popen([cmake_path, "--build", ".", "--config", "Release", "--target"
-                             "install"], cwd=protobuf_build_folder, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
+        # python module
+        print("Building package: protobuf (python module)")
 
-    output = proc.communicate()[0]
-    if proc.returncode != 0:
-        print(output)
-        return False
+        os.environ["PATH"] = os.environ["PATH"] + ";" + os.path.join(protobuf_install_folder, "bin")
+        protobuf_python_installer = os.path.realpath(os.path.join(protobuf_src_folder, "python"))
 
-    # python module
-    proc = subprocess.Popen(["python2", "setup.py", "build"], cwd=protobuf_src_folder,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen([get_python_path(), "setup.py", "build"],
+                                cwd=protobuf_python_installer, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
 
-    output = proc.communicate()[0]
-    if proc.returncode != 0:
-        print(output)
-        return False
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
 
-    proc = subprocess.Popen(["python2", "setup.py", "install"], cwd=protobuf_src_folder,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        print("Installing package: protobuf (python module)")
+        proc = subprocess.Popen([get_python_path(), "setup.py", "install"],
+                                cwd=protobuf_python_installer, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
 
-    output = proc.communicate()[0]
-    if proc.returncode != 0:
-        print(output)
-        return False
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
 
     #
     # llvm/clang
@@ -554,7 +620,7 @@ def main():
             install_prefix = "/usr"
 
         elif platform_type == "windows":
-            install_prefix = os.path.join("C:", "mcsema")
+            install_prefix = os.path.join("C:\\", "mcsema")
 
         else:
             print("Unrecognized platform. Aborting...")
