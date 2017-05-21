@@ -143,6 +143,7 @@ def install_msi_package(msi_path, installed_executable_path):
     if not msi_path or not installed_executable_path:
         return False
 
+    # some packages do not work with /quiet...
     process = subprocess.Popen(["msiexec", "/passive", "/i", msi_path],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -212,7 +213,6 @@ def get_7zip_path():
         if os.path.isfile(p7zip_path):
             return p7zip_path
 
-        print "error"
         return None
 
     elif platform_type == "linux" or platform_type == "osx":
@@ -292,12 +292,14 @@ def install_windows_deps():
     sevenzip_path = get_7zip_path()
     if sevenzip_path is None:
         print("Downloading package: 7zip")
-        if not pshell_download_file(p7zip_msi_link, os.path.join(build_folder_path,
-                                                                 "7z_installer.msi")):
+
+        msi_path = os.path.realpath(os.path.join(build_folder_path, "7z_installer.msi"))
+        if not pshell_download_file(p7zip_msi_link, msi_path):
             return False
 
         print("Installing package: 7zip")
-        if not install_msi_package("7z_installer.msi", sevenzip_path):
+        sevenzip_path = os.path.join("C:\\", "Program Files (x86)", "7-zip", "7z.exe")
+        if not install_msi_package(msi_path, sevenzip_path):
             return False
 
     #
@@ -307,13 +309,14 @@ def install_windows_deps():
     cmake_path = get_cmake_path()
     if cmake_path is None:
         print("Downloading package: CMake")
-        if not pshell_download_file(cmake_msi_link, os.path.join(build_folder_path,
-                                                                 "cmake_installer.msi")):
+
+        msi_path = os.path.realpath(os.path.join(build_folder_path, "cmake_installer.msi"))
+        if not pshell_download_file(cmake_msi_link, msi_path):
             return False
 
         print("Installing package: CMake")
         cmake_path = os.path.join("C:\\", "Program Files (x86)", "CMake", "bin", "cmake.exe")
-        if not install_msi_package("cmake_installer.msi", cmake_path):
+        if not install_msi_package(msi_path, cmake_path):
             return False
 
     #
@@ -366,7 +369,7 @@ def install_windows_deps():
             print(output)
             return False
 
-        print("Building and installing package: protobuf (native module)")
+        print("Building package: protobuf (native module)")
         proc = subprocess.Popen([cmake_path, "--build", ".", "--config", "Release", "--target",
                                  "install"], cwd=protobuf_build_folder, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
