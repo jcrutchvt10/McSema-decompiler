@@ -525,7 +525,7 @@ def install_windows_deps():
 
 def install_osx_deps():
     """
-    Installs the requires OSX packages.
+    Installs the required OSX packages.
     """
 
     # search for the brew executable
@@ -603,6 +603,16 @@ def main():
     """
     This function will install the required dependencies and install mcsema
     """
+
+    platform_type = get_platform_type()
+    if platform_type == "unknown":
+        print("Unknown platform! Aborting...")
+        return False
+
+    # somehow cygwin causes issues with paths
+    elif platform_type == "cygwin":
+        print("Cygwin is not supported! Aborting...")
+        return False
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--install-deps", help="install required dependencies",
