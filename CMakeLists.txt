@@ -91,10 +91,16 @@ configure_file("mcsema/Version.h.in" "${CMAKE_BINARY_DIR}/mcsema_version.h")
 
 # this function can't be told where to store the output files! we have to add the whole binary directory
 # to the include directories (or change it and lose compatibility with the system libraries)
-protobuf_generate_cpp(PROJECT_PROTOBUFSOURCEFILES PROJECT_PROTOBUFHEADERFILES "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+set(PROJECT_PROTO_PATH "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+
+if (WIN32)
+    set(PROTOBUF_GENERATE_CPP_APPEND_PATH 1)
+endif ()
+
+protobuf_generate_cpp(PROJECT_PROTOBUFSOURCEFILES PROJECT_PROTOBUFHEADERFILES "${PROJECT_PROTO_PATH}")
 list(APPEND PROJECT_INCLUDEDIRECTORIES ${CMAKE_BINARY_DIR})
 
-protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${CMAKE_SOURCE_DIR}/mcsema/CFG/CFG.proto")
+protobuf_generate_python(PROJECT_PROTOBUFPYTHONMODULE "${PROJECT_PROTO_PATH}")
 add_custom_target(protobuf_python_module DEPENDS ${PROJECT_PROTOBUFPYTHONMODULE})
 
 #

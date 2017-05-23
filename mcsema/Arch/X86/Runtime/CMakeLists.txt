@@ -3,10 +3,8 @@ enable_language(ASM)
 
 # Create the Windows runtimes
 if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-
     #TODO(artem): find clang for windows compiler and build
-    message(WARNING "Runtime generation is only supported on Windows when building with clang. Runtimes will be unavailable, but mcsema-lift will still work")
-    message(WARNING "Did you specify a toolset (for example via -T llvm-vs2013) to cmake?")
+    message(WARNING "Runtime generation is only supported on Windows when building with clang. Runtimes will be unavailable, but mcsema-lift will still work. Did you specify a toolset (for example via -T llvm-vs2013) to cmake?")
 
 elseif(APPLE)
     #TODO(artem): Support runtimes on MacOS

@@ -8,12 +8,42 @@ from distutils import spawn
 
 import utils
 
-def get_clang_path():
+def append_parallel_build_options(parameters):
+    """
+    Appends to the parallel build options to the given variable
+    """
+
     platform_type = get_platform_type()
-    clang_compiler_type = collections.namedtuple("clang_compiler_type", "c_compiler cpp_compiler")
 
     if platform_type == "windows":
-        clangcl_path = spawn.find_executable("clang-cl.exe")
+        processor_count = os.environ["NUMBER_OF_PROCESSORS"]
+        if not processor_count or not processor_count.isdigit():
+            processor_count = "4"
+
+        parameters.append("/maxcpucount:" + processor_count)
+        parameters.append("/p:BuildInParallel=true")
+
+        return parameters
+
+    elif platform_type == "linux" or platform_type == "osx":
+        parameters.append("-j")
+        parameters.append("4")
+
+        return parameters
+
+    else:
+        return parameters
+
+def get_clang_path():
+    """
+    Returns the clang path
+    """
+
+    platform_type = get_platform_type()
+    clang_compiler_type = collections.namedtuple("clang_compiler_type", "name c_compiler cpp_compiler")
+
+    if platform_type == "windows":
+        clangcl_path = spawn.find_executable("clang-cl.exe").replace("\\", "/")
         if clangcl_path is None:
             print("Please install Clang for Windows.")
             print("Instructions:")
@@ -45,8 +75,6 @@ def get_clang_path():
 
     else:
         return None
-
-
 
 def get_python_path():
     """

@@ -103,7 +103,7 @@ def get_visual_studio_env_settings():
         print("Unrecognized Visual Studio version. Minumum version supported is VS2013")
         return None
 
-    vstoolset_type = collections.namedtuple("vstoolset_type", "vsbuild")
+    vstoolset_type = collections.namedtuple("vstoolset_type", "name vsbuild")
     return vstoolset_type(name=vstoolset, vsbuild=vsbuild)
 
 def install_windows_deps():
@@ -227,7 +227,8 @@ def install_windows_deps():
         os.environ["PATH"] = os.environ["PATH"] + ";" + os.path.join(protobuf_install_folder, "bin")
         protobuf_python_installer = os.path.realpath(os.path.join(protobuf_src_folder, "python"))
 
-        proc = subprocess.Popen([get_python_path(), "setup.py", "build"],
+        python_path = utils.get_python_path()
+        proc = subprocess.Popen([python_path, "setup.py", "build"],
                                 cwd=protobuf_python_installer, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
 
@@ -237,7 +238,7 @@ def install_windows_deps():
             return False
 
         print("Installing package: protobuf (python module)")
-        proc = subprocess.Popen([get_python_path(), "setup.py", "install"],
+        proc = subprocess.Popen([python_path, "setup.py", "install"],
                                 cwd=protobuf_python_installer, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
 
@@ -288,6 +289,7 @@ def install_windows_deps():
     llvm_install_folder = os.path.realpath(os.path.join(build_folder_path,
                                                         "llvm-install"))
 
+    original_path_variable = os.environ["PATH"]
     if os.path.isdir(llvm_install_folder):
         os.environ["PATH"] = os.environ["PATH"] + ";" + os.path.join(llvm_install_folder, "bin")
 
@@ -364,4 +366,5 @@ def install_windows_deps():
             print(output)
             return False
 
+    os.environ["PATH"] = original_path_variable
     return True
