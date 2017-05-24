@@ -170,6 +170,12 @@ target_compile_definitions(mcsema-lift PRIVATE ${PROJECT_DEFINITIONS})
 set_target_properties(mcsema-lift PROPERTIES COMPILE_FLAGS ${GLOBAL_CXXFLAGS})
 target_link_libraries(mcsema-lift PRIVATE ${PROJECT_LIBRARIES})
 
+# this is only needed when linking on windows; this error originates from the LLVM
+# static libraries, and not from our code
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN")
+    target_link_libraries(mcsema-lift PRIVATE "-Wl,--allow-multiple-definition")
+endif ()
+
 # make sure the python module is generated
 add_dependencies(mcsema-lift protobuf_python_module)
 

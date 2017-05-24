@@ -92,32 +92,34 @@ def main():
     else:
         print("Skipping the dependency installer...")
 
-    install_prefix = arguments.prefix
-    if install_prefix is None:
-        platform_type = utils.get_platform_type()
-        if platform_type == "linux" or platform_type == "osx":
-            install_prefix = "/usr"
-
-        elif platform_type == "windows":
-            install_prefix = os.path.join("C:\\", "mcsema")
-
-        else:
-            print("Unrecognized platform. Aborting...")
-            return False
-
-    print("Install prefix: " + install_prefix)
-
     build_folder = "build"
     if not os.path.isdir(build_folder):
         os.mkdir(build_folder)
 
     build_folder = os.path.realpath(build_folder)
 
-    mcsema_build_folder = os.path.join(build_folder, "mcsema")
+    install_prefix = arguments.prefix
+    if install_prefix is None:
+        platform_type = utils.get_platform_type()
+        if platform_type == "linux" or platform_type == "osx":
+            install_prefix = "/usr"
+
+        elif platform_type != "windows":
+            print("Unrecognized platform. Aborting...")
+            return False
+
+    if platform_type == "windows":
+        install_prefix = os.path.join(build_folder, "mcsema-install").replace("/", "\\")
+
+    print("Install prefix: " + install_prefix)
+
+    mcsema_build_folder = os.path.join(build_folder, "mcsema-build")
     if not os.path.isdir(mcsema_build_folder):
         os.mkdir(mcsema_build_folder)
 
     mcsema_build_folder = os.path.realpath(mcsema_build_folder)
+    if platform_type == "windows":
+        mcsema_build_folder = mcsema_build_folder.replace("/", "\\")
 
     print("Build folder: " + mcsema_build_folder)
 
@@ -141,7 +143,12 @@ def main():
 
     source_folder = os.path.realpath(".")
 
-    cmake_parameter_list = [cmake_path, "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+    if platform_type == "windows":
+        build_type = "Release"
+    else:
+        build_type = "RelWithDebInfo"
+
+    cmake_parameter_list = [cmake_path, "-DCMAKE_BUILD_TYPE=" + build_type,
                             "-DCMAKE_VERBOSE_MAKEFILE=True",
                             "-DCMAKE_INSTALL_PREFIX=" + install_prefix,
                             "-DCMAKE_C_COMPILER=" + clang_path.c_compiler,
@@ -154,15 +161,17 @@ def main():
         protobuf_install_path = os.path.join(build_folder, "protobuf-install").replace("\\", "/")
         llvm_install_prefix = os.path.join(build_folder, "llvm-install").replace("\\", "/")
 
+        cmake_parameter_list.append("-DCMAKE_MODULE_PATH=" + cmake_module_path)
+        cmake_parameter_list.append("-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path)
+        cmake_parameter_list.append("-DCMAKE_PREFIX_PATH=" + llvm_install_prefix)
+
         cmake_parameter_list.append("--")
 
         cmake_parameter_list.append("-G")
         vs_env_settings = windows.get_visual_studio_env_settings()
         cmake_parameter_list.append(vs_env_settings.vsbuild)
 
-        cmake_parameter_list.append("-DCMAKE_MODULE_PATH=" + cmake_module_path)
-        cmake_parameter_list.append("-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path)
-        cmake_parameter_list.append("-DCMAKE_PREFIX_PATH=" + llvm_install_prefix)
+        cmake_parameter_list.append("/verbosity:detailed")
 
     cmake_parameter_list.append(source_folder)
 
@@ -182,6 +191,8 @@ def main():
         cmake_parameter_list.append("-T")
         cmake_parameter_list.append("LLVM-vs2014") # todo: detect this automatically
 
+        cmake_parameter_list.append("/verbosity:detailed")
+
     process = subprocess.Popen(cmake_parameters, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                cwd=mcsema_build_folder)
 
@@ -199,8 +210,13 @@ def main():
         cmake_command.append("sudo")
 
     cmake_command.append(cmake_path)
+
     cmake_command.append("--build")
     cmake_command.append(".")
+
+    cmake_command.append("--config")
+    cmake_command.append("Release")
+
     cmake_command.append("--target")
     cmake_command.append("install")
 
@@ -218,7 +234,7 @@ def main():
     if arguments.run_tests:
         print("Running tests...")
 
-        os.environ['MCSEMA_INSTALL_PREFIX'] = arguments.prefix
+        os.environ['MCSEMA_INSTALL_PREFIX'] = install_prefix
         if subprocess.call(["python2", "tests/integration_test.py"]) != 0:
             print("One or more tests have failed! Exiting with error...")
             return False
