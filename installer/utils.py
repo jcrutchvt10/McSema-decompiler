@@ -88,7 +88,13 @@ def get_python_path():
     platform_type = get_platform_type()
 
     if platform_type == "windows":
-        return spawn.find_executable("python.exe")
+        python_path = spawn.find_executable("python.exe")
+
+        if python_path is None:
+            python_path = spawn.find_executable("python.exe",
+                                                os.path.join("C:\\", "Python27"))
+
+        return python_path
 
     elif platform_type == "linux" or platform_type == "osx":
         return spawn.find_executable("python")
@@ -104,15 +110,19 @@ def get_cmake_path():
     platform_type = get_platform_type()
 
     if platform_type == "windows":
-        cmake_path = os.path.join("C:\\", "Program Files", "CMake", "bin", "cmake.exe")
-        if os.path.isfile(cmake_path):
-            return cmake_path
+        cmake_path = spawn.find_executable("cmake.exe")
 
-        cmake_path = os.path.join("C:\\", "Program Files (x86)", "CMake", "bin", "cmake.exe")
-        if os.path.isfile(cmake_path):
-            return cmake_path
+        if cmake_path is None:
+            cmake_path = spawn.find_executable("cmake.exe",
+                                               os.path.join("C:\\", "Program Files",
+                                                            "CMake", "bin"))
 
-        return None
+        if cmake_path is None:
+            cmake_path = spawn.find_executable("cmake.exe",
+                                               os.path.join("C:\\", "Program Files (x86)",
+                                                            "CMake", "bin"))
+
+        return cmake_path
 
     elif platform_type == "linux" or platform_type == "osx":
         return spawn.find_executable("cmake")
@@ -128,15 +138,19 @@ def get_7zip_path():
     platform_type = get_platform_type()
 
     if platform_type == "windows":
-        p7zip_path = os.path.join("C:\\", "Program Files", "7-Zip", "7z.exe")
-        if os.path.isfile(p7zip_path):
-            return p7zip_path
+        p7zip_path = spawn.find_executable("7z.exe")
 
-        p7zip_path = os.path.join("C:\\", "Program Files (x86)", "7-Zip", "7z.exe")
-        if os.path.isfile(p7zip_path):
-            return p7zip_path
+        if p7zip_path is None:
+            p7zip_path = spawn.find_executable("7z.exe",
+                                               os.path.join("C:\\", "Program Files",
+                                                            "7-Zip"))
 
-        return None
+        if p7zip_path is None:
+            p7zip_path = spawn.find_executable("7z.exe",
+                                               os.path.join("C:\\", "Program Files (x86)",
+                                                            "7-Zip"))
+
+        return p7zip_path
 
     elif platform_type == "linux" or platform_type == "osx":
         return spawn.find_executable("7z")
