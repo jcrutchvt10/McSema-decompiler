@@ -43,7 +43,10 @@ def get_clang_path():
     clang_compiler_type = collections.namedtuple("clang_compiler_type", "name c_compiler cpp_compiler")
 
     if platform_type == "windows":
-        clangcl_path = spawn.find_executable("clang-cl.exe").replace("\\", "/")
+        clangcl_path = spawn.find_executable("clang-cl.exe", "C:\\Program Files\\llvm\\bin")
+        if clangcl_path is None:
+            clangcl_path = spawn.find_executable("clang-cl.exe", "C:\\Program Files (x86)\\llvm\\bin")
+
         if clangcl_path is None:
             print("Please install Clang for Windows.")
             print("Instructions:")
@@ -52,6 +55,7 @@ def get_clang_path():
             print("Open the LLVM install folder and run tools/msbuild/install.bat")
             return None
 
+        clangcl_path = clangcl_path.replace("\\", "/")
         return clang_compiler_type(name="Windows Clang", c_compiler=clangcl_path,
                                    cpp_compiler=clangcl_path)
 

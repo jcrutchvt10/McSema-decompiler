@@ -109,7 +109,7 @@ def main():
             return False
 
     if platform_type == "windows":
-        install_prefix = os.path.join(build_folder, "mcsema-install").replace("/", "\\")
+        install_prefix = os.path.join(build_folder, "mcsema-install").replace("\\", "/")
 
     print("Install prefix: " + install_prefix)
 
@@ -119,7 +119,7 @@ def main():
 
     mcsema_build_folder = os.path.realpath(mcsema_build_folder)
     if platform_type == "windows":
-        mcsema_build_folder = mcsema_build_folder.replace("/", "\\")
+        mcsema_build_folder = mcsema_build_folder.replace("\\", "/")
 
     print("Build folder: " + mcsema_build_folder)
 
@@ -142,6 +142,8 @@ def main():
     print("Configuring McSema...")
 
     source_folder = os.path.realpath(".")
+    if platform_type == "windows":
+        source_folder = source_folder.replace("\\", "/")
 
     if platform_type == "windows":
         build_type = "Release"
@@ -165,16 +167,17 @@ def main():
         cmake_parameter_list.append("-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path)
         cmake_parameter_list.append("-DCMAKE_PREFIX_PATH=" + llvm_install_prefix)
 
-        cmake_parameter_list.append("--")
-
         cmake_parameter_list.append("-G")
+        #cmake_parameter_list.append("Ninja")
+        
         vs_env_settings = windows.get_visual_studio_env_settings()
         cmake_parameter_list.append(vs_env_settings.vsbuild)
-
+        cmake_parameter_list.append("--")
         cmake_parameter_list.append("/verbosity:detailed")
 
     cmake_parameter_list.append(source_folder)
 
+    print(str(cmake_parameter_list))
     process = subprocess.Popen(cmake_parameter_list, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, cwd=mcsema_build_folder)
 
