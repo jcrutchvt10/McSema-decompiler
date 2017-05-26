@@ -111,6 +111,10 @@ def install_windows_deps():
     Installs the requires Windows components.
     """
 
+    vs_env_settings = get_visual_studio_env_settings()
+    if vs_env_settings is None:
+        return False
+
     build_folder_path = os.path.realpath("build")
     if not os.path.isdir(build_folder_path):
         os.mkdir(build_folder_path)
@@ -194,10 +198,6 @@ def install_windows_deps():
             except:
                 print("Failed to create the protobuf build folder")
                 return False
-
-        vs_env_settings = get_visual_studio_env_settings()
-        if vs_env_settings is None:
-            return False
 
         os.environ["PROTOBUF_ROOT"] = protobuf_src_folder
         proc = subprocess.Popen([cmake_path, "-G", vs_env_settings.vsbuild, "-DPROTOBUF_ROOT=" +
