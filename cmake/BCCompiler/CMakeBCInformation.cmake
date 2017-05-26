@@ -51,7 +51,8 @@ function (add_runtime target_name)
         endif ()
     endforeach ()
 
-    foreach (source_file ${sourcefile_list})
+    foreach (source_file ${source_file_list})
+        message(STATUS "   > setting ${source_file} to be bitcode")
         set_source_files_properties("${source_file}" PROPERTIES LANGUAGE BC)
     endforeach ()
 
@@ -63,11 +64,15 @@ function (add_runtime target_name)
         message(SEND_ERROR "No source files specified.")
     endif ()
 
+    message(STATUS " > adding ${target_name} composed of: ${source_file_list}")
     add_executable("${target_name}" ${source_file_list})
     target_compile_definitions("${target_name}" PRIVATE ${definitions})
     set_target_properties("${target_name}" PROPERTIES SUFFIX ".bc")
 
-    foreach (source_file ${sourcefile_list})
-      add_dependencies("${target_name}" "${source_file}")
-    endforeach()
+    #This is unnecessary since add_executable adds all sources as dependencies
+    #and it also errors my (artem) cmake 
+    #foreach (source_file ${source_file_list})
+    #  add_dependencies("${target_name}" "${source_file}")
+	#  message(STATUS " > adding dep from ${target_name} to ${soruce_file}")
+    #endforeach()
 endfunction ()
