@@ -97,7 +97,7 @@ def get_visual_studio_env_settings():
         vstoolset = "llvm-vs2014"
 
     if vstoolset != "unknown" and platform.machine().endswith('64'):
-        vstoolset = vstoolset + " Win64"
+        vsbuild = vsbuild + " Win64"
 
     if vsbuild == "unknown" or vstoolset == "unknown":
         print("Unrecognized Visual Studio version. Minumum version supported is VS2013")
@@ -126,6 +126,7 @@ def install_windows_deps():
     p7zip_msi_link = "http://www.7-zip.org/a/7z1604.msi"
     cmake_msi_link = "https://cmake.org/files/v3.8/cmake-3.8.1-win32-x86.msi"
     protobuf_zip_link = "https://github.com/google/protobuf/releases/download/v2.6.1/protobuf-2.6.1.zip"
+    ninja_link = "https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-win.zip"
 
     #
     # 7-zip
@@ -200,6 +201,7 @@ def install_windows_deps():
                 return False
 
         os.environ["PROTOBUF_ROOT"] = protobuf_src_folder
+
         proc = subprocess.Popen([cmake_path, "-G", vs_env_settings.vsbuild, "-DPROTOBUF_ROOT=" +
                                  protobuf_src_folder, "-DCMAKE_INSTALL_PREFIX=" +
                                  protobuf_install_folder, protobuf_cmake_project],
@@ -241,6 +243,33 @@ def install_windows_deps():
         proc = subprocess.Popen([python_path, "setup.py", "install"],
                                 cwd=protobuf_python_installer, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
+
+        output = proc.communicate()[0]
+        if proc.returncode != 0:
+            print(output)
+            return False
+
+    #
+    # ninja
+    #
+
+    ninja_path = utils.get_ninja_path()
+    if ninja_path is None:
+        print("Downloading package: Ninja")
+
+        zip_path = os.path.realpath(os.path.join(build_folder_path, "ninja.zip"))
+        if not pshell_download_file(ninja_link, zip_path):
+            return False
+
+        ninja_install_path = os.path.realpath(os.path.join(build_folder_path, "ninja-install"))
+        if not os.path.isdir(ninja_install_path):
+            os.mkdir(ninja_install_path)
+
+        print("Extracting package: Ninja")
+        proc = subprocess.Popen([sevenzip_path, "-bd", "x", "-y", os.path.join(build_folder_path,
+                                                                               "ninja.zip")],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                cwd=ninja_install_path)
 
         output = proc.communicate()[0]
         if proc.returncode != 0:

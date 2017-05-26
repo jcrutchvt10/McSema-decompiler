@@ -80,6 +80,19 @@ def main():
 
     arguments = arg_parser.parse_args()
 
+    build_folder = "build"
+    if not os.path.isdir(build_folder):
+        os.mkdir(build_folder)
+
+    if platform_type == "windows":
+        local_llvm_folder = os.path.realpath(os.path.join(build_folder, "llvm-install", "bin"))
+        if os.path.isdir(local_llvm_folder):
+            os.environ["PATH"] = os.environ["PATH"] + ";" + local_llvm_folder.replace("\\", "/")
+
+        local_ninja_folder = os.path.realpath(os.path.join(build_folder, "ninja-install"))
+        if os.path.isdir(local_ninja_folder):
+            os.environ["PATH"] = os.environ["PATH"] + ";" + local_ninja_folder.replace("\\", "/")
+
     if arguments.install_deps:
         print("Looking for missing dependencies...")
 
@@ -91,10 +104,6 @@ def main():
 
     else:
         print("Skipping the dependency installer...")
-
-    build_folder = "build"
-    if not os.path.isdir(build_folder):
-        os.mkdir(build_folder)
 
     build_folder = os.path.realpath(build_folder)
 
@@ -128,11 +137,6 @@ def main():
         print("Failed to locate cmake")
         return False
 
-    if platform_type == "windows":
-        local_llvm_folder = os.path.join(build_folder, "llvm-install", "bin")
-        if not os.path.isdir(local_llvm_folder):
-            os.environ["PATH"] = os.environ["PATH"] + ";" + local_llvm_folder.replace("\\", "/")
-
     clang_path = utils.get_clang_path()
     if clang_path is None:
         print("Failed to locate the clang compiler")
@@ -152,11 +156,13 @@ def main():
 
     cmake_parameter_list = [cmake_path, "-DCMAKE_BUILD_TYPE=" + build_type,
                             "-DCMAKE_VERBOSE_MAKEFILE=True",
-                            "-DCMAKE_INSTALL_PREFIX=" + install_prefix,
-                            "-DCMAKE_C_COMPILER=" + clang_path.c_compiler,
-                            "-DCMAKE_CXX_COMPILER=" + clang_path.cpp_compiler]
+                            "-DCMAKE_INSTALL_PREFIX=" + install_prefix]
 
-    if platform_type == "windows":
+    if platform_type != "windows":
+        cmake_parameter_list.append("-DCMAKE_C_COMPILER=" + clang_path.c_compiler)
+        cmake_parameter_list.append("-DCMAKE_CXX_COMPILER=" + clang_path.cpp_compiler)
+
+    else:
         cmake_module_path = os.path.join(source_folder, "windows",
                                          "protobuf_cmake_findpackage").replace("\\", "/")
 
@@ -167,11 +173,10 @@ def main():
         cmake_parameter_list.append("-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path)
         cmake_parameter_list.append("-DCMAKE_PREFIX_PATH=" + llvm_install_prefix)
 
-        cmake_parameter_list.append("-G")
-        #cmake_parameter_list.append("Ninja")
-        
         vs_env_settings = windows.get_visual_studio_env_settings()
+        cmake_parameter_list.append("-G")
         cmake_parameter_list.append(vs_env_settings.vsbuild)
+
         cmake_parameter_list.append("-T")
         cmake_parameter_list.append("LLVM-vs2014") # todo: detect this automatically
 

@@ -158,6 +158,34 @@ def get_7zip_path():
     else:
         return None
 
+def get_ninja_path():
+    """
+    Returns the Ninja path
+    """
+
+    platform_type = get_platform_type()
+
+    if platform_type == "windows":
+        ninja_path = spawn.find_executable("ninja.exe")
+
+        if ninja_path is None:
+            ninja_path = spawn.find_executable("ninja.exe",
+                                               os.path.join("C:\\", "Program Files",
+                                                            "Ninja"))
+
+        if ninja_path is None:
+            ninja_path = spawn.find_executable("ninja.exe",
+                                               os.path.join("C:\\", "Program Files (x86)",
+                                                            "Ninja"))
+
+        return ninja_path
+
+    elif platform_type == "linux" or platform_type == "osx":
+        return spawn.find_executable("ninja")
+
+    else:
+        return None
+
 def get_platform_type():
     """
     Returns the platform type (linux, windows, osx, unknown).

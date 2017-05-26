@@ -74,4 +74,3 @@ endif ()
 if (TARGET mcsema_rt64)
     install(TARGETS mcsema_rt64 ARCHIVE DESTINATION lib)
 endif()
-

@@ -48,9 +48,9 @@ endif ()
 
 list(APPEND PROJECT_LIBRARIES ${LLVM_LIBRARIES})
 
-if(NOT WIN32)
-  # LLVM definitions are broken, they include /MP as a definition when its a flag
-  list(APPEND PROJECT_DEFINITIONS ${LLVM_DEFINITIONS})
+if (NOT WIN32)
+    # LLVM definitions are broken, they include /MP as a definition when its a flag
+    list(APPEND PROJECT_DEFINITIONS ${LLVM_DEFINITIONS})
 endif()
 
 list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES ${LLVM_INCLUDE_DIRS})
@@ -65,6 +65,8 @@ endif ()
 
 list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${LLVM_PRIVATE_HEADERS_BASE_PATH}")
 list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES "${LLVM_PRIVATE_HEADERS_BASE_PATH}/llvm/lib/Target/X86")
+
+include("${CMAKE_SOURCE_DIR}/cmake/BCCompiler.cmake")
 
 # protobuf
 find_package(Protobuf REQUIRED)
@@ -187,8 +189,8 @@ endif ()
 add_dependencies(mcsema-lift protobuf_python_module)
 
 # also add the Runtime and Bitcode targets
-add_subdirectory(mcsema/Arch/X86/Runtime)
-add_subdirectory(mcsema/Arch/X86/Semantics/Bitcode)
+#add_subdirectory(mcsema/Arch/X86/Runtime)
+#add_subdirectory(mcsema/Arch/X86/Semantics/Bitcode)
 
 #
 # install directives

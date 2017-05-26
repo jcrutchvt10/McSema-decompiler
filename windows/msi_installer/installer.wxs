@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" Name="McSema" Language="1033" Version="1.0" Manufacturer="Trail of Bits" UpgradeCode="819ffdfb-fb66-41d2-b5c8-a684298f4af3">
+        <Package InstallerVersion="301" Compressed="yes" InstallScope="perMachine" Manufacturer="Trail of Bits" Description="x86 to LLVM bitcode translation framework." Comments="(c) 2017 Trail of Bits"/>
+        <MediaTemplate EmbedCab="yes"/>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="MenuRoot" Name="Trail of Bits">
+                    <Directory Id="MenuMcSema" Name="McSema">
+                        <Component Id="CMP_menu" Guid="652ce8f6-5772-4caf-b970-a80dd1e9fbbf">
+                            <RemoveFolder Id="REMOVE_menu" On="uninstall"/>
+                            <RegistryValue Root="HKCU" Key="Software\TrailOfBits\McSema" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+
+                            <Shortcut Id="SHORTCUT_repository" Name="McSema GitHub Repository" Description="Opens the McSema GitHub repository in the default browser." Target="https://github.com/trailofbits/mcsema"/>
+                            <Shortcut Id="SHORTCUT_cmdprompt" Name="Open the McSema command prompt" Description="Opens the Windows command prompt in the McSema directory." Target="todo"/>
+                            <Shortcut Id="SHORTCUT_powershellprompt" Name="Open the McSema powershell prompt" Description="Opens the Windows powershell prompt in the McSema directory." Target="todo"/>
+                        </Component>
+                    </Directory>
+                </Directory>
+            </Directory>
+
+            <Directory Id="McSema" Name="mcsema">
+                <Directory Id="McSemaBin" Name="bin">
+                    <Component Id="CMP_mcsema-lift" Guid="357fe75e-bc3e-4cdb-a86b-56419f5986e4">
+                        <File Id="FILE_mcsema-lift" Source="bin\mcsema-lift.exe" KeyPath="yes"/>
+                    </Component>
+                </Directory>
+
+                <Directory Id="McSemaLib" Name="lib">
+                    <Component Id="CMP_libmcsema_rt32" Guid="36337b06-cbd6-45f9-9fe1-c5e48421d88a">
+                        <File Id="FILE_libmcsema_rt32" Source="lib\libmcsema_rt32.lib" KeyPath="yes"/>
+                    </Component>
+
+                    <Component Id="CMP_libmcsema_rt64" Guid="27e96f6c-4d51-42bf-8df5-c3c1e4a903a6">
+                        <File Id="FILE_libmcsema_rt64" Source="lib\libmcsema_rt64.lib" KeyPath="yes"/>
+                    </Component>
+                </Directory>
+
+                <Directory Id="McSemaShare" Name="share">
+                    <Directory Id="McSemaShareMcSema" Name="mcsema">
+                        <Directory Id="McSemaShareMcSemaBitcode" Name="bitcode">
+                            <Component Id="CMP_mcsema_semantics_x86" Guid="1a8b656e-645e-4187-914f-52955e4cd476">
+                                <File Id="FILE_mcsema_semantics_x86" Source="share\mcsema\bitcode\mcsema_semantics_x86.bc" KeyPath="yes"/>
+                            </Component>
+
+                            <Component Id="CMP_mcsema_semantics_amd64" Guid="1b989004-37a0-4790-8910-3d76f0d6dae3">
+                                <File Id="FILE_mcsema_semantics_amd64" Source="share\mcsema\bitcode\mcsema_semantics_amd64.bc" KeyPath="yes"/>
+                            </Component>
+                        </Directory>
+
+                        <Directory Id="McSemaShareMcSemaIdaPluginInstaller" Name="ida_plugin_installer">
+                            <Component Id="CMP_initpy1" Guid="0bbbdaf3-077f-4e1e-bad0-2f25a45cf4b8">
+                                <File Id="FILE_initpy1" Source="share\mcsema\ida_plugin_installer\__init__.py" KeyPath="yes"/>
+                            </Component>
+
+                            <Component Id="CMP_main" Guid="a7acdced-1e0c-41a4-b494-39d7afe0afb1">
+                                <File Id="FILE_main" Source="share\mcsema\ida_plugin_installer\__main__.py" KeyPath="yes"/>
+                            </Component>
+
+                            <Component Id="CMP_setup" Guid="3defbb5e-a5e5-427f-8f1a-8a7f5fdc49f9">
+                                <File Id="FILE_setup" Source="share\mcsema\ida_plugin_installer\setup.py" KeyPath="yes"/>
+                            </Component>
+
+                            <Directory Id="McSemaShareMcSemaIdaPluginInstallerDefs" Name="defs">
+                                <Component Id="CMP_initpy2" Guid="a24d0655-ddab-439c-8fea-431f8d3a05ac">
+                                    <File Id="FILE_initpy2" Source="share\mcsema\ida_plugin_installer\defs\__init__.py" KeyPath="yes"/>
+                                </Component>
+
+                                <Component Id="CMP_linux" Guid="47c66135-94a7-476a-a776-e9a90172a7ff">
+                                    <File Id="FILE_linux" Source="share\mcsema\ida_plugin_installer\defs\linux.txt" KeyPath="yes"/>
+                                </Component>
+
+                                <Component Id="CMP_windows" Guid="7d04a48b-5388-4d60-a622-6481bc9fd606">
+                                    <File Id="FILE_windows" Source="share\mcsema\ida_plugin_installer\defs\windows.txt" KeyPath="yes"/>
+                                </Component>
+                            </Directory>
+
+                            <Directory Id="McSemaShareMcSemaIdaPluginInstallerIda" Name="ida">
+                                <Component Id="CMP_cfgbp2py" Guid="96a4a9a4-4ac4-48be-97d3-9fa97e714c2f">
+                                    <File Id="FILE_cfgbp2py" Source="share\mcsema\ida_plugin_installer\ida\CFG_pb2.py" KeyPath="yes"/>
+                                </Component>
+
+                                <Component Id="CMP_disasspy" Guid="594c8c9e-f4d3-460d-b974-7a747c90234f">
+                                    <File Id="FILE_disasspy" Source="share\mcsema\ida_plugin_installer\ida\disass.py" KeyPath="yes"/>
+                                </Component>
+
+                                <Component Id="CMP_getcfgpy" Guid="717fe60f-865e-4257-b310-1f6c7d3c4225">
+                                    <File Id="FILE_getcfgpy" Source="share\mcsema\ida_plugin_installer\ida\get_cfg.py" KeyPath="yes"/>
+                                </Component>
+
+                                <Component Id="CMP_initpy3" Guid="3299c2ae-3661-464c-8211-a5e7de6082c2">
+                                    <File Id="FILE_initpy3" Source="share\mcsema\ida_plugin_installer\ida\__init__.py" KeyPath="yes"/>
+                                </Component>
+
+                                <Component Id="CMP_mcsemapy" Guid="995c78e7-f1a6-48b0-85d0-aeda764fec16">
+                                    <File Id="FILE_mcsemapy" Source="share\mcsema\ida_plugin_installer\ida\mcsema.py" KeyPath="yes"/>
+                                </Component>
+                            </Directory>
+                        </Directory>
+                    </Directory>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <Feature Id="FEATURE_mcsema" Title="McSema" Level="1">
+            <ComponenRef Id="CMP_menu"/>
+
+            <ComponenRef Id="CMP_mcsema-lift"/>
+
+            <ComponenRef Id="CMP_libmcsema_rt32"/>
+            <ComponenRef Id="CMP_libmcsema_rt64"/>
+
+            <ComponenRef Id="CMP_mcsema_semantics_x86"/>
+            <ComponenRef Id="CMP_mcsema_semantics_amd64"/>
+
+            <ComponenRef Id="CMP_initpy1"/>
+            <ComponenRef Id="CMP_main"/>
+            <ComponenRef Id="CMP_setup"/>
+
+            <ComponenRef Id="CMP_initpy2"/>
+            <ComponenRef Id="CMP_linux"/>
+            <ComponenRef Id="CMP_windows"/>
+
+            <ComponenRef Id="CMP_cfgbp2py"/>
+            <ComponenRef Id="CMP_disasspy"/>
+            <ComponenRef Id="CMP_getcfgpy"/>
+            <ComponenRef Id="CMP_initpy3"/>
+            <ComponenRef Id="CMP_mcsemapy"/>
+        </Feature>
+    </Product>
+</Wix>
