@@ -34,7 +34,6 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/BCCompiler)
 # warnings and compiler settings
 if ("${CMAKE_CXX_COMPILER}" MATCHES "cl.exe")
     set(GLOBAL_CXXFLAGS
-        /MD
         /nologo
         /DGOOGLE_PROTOBUF_NO_RTTI
         /W3
