@@ -185,10 +185,6 @@ def main():
 
     cmake_parameter_list.append(source_folder)
 
-    # todo: remove this!
-    sys.stdout.write(" ".join(cmake_parameter_list))
-    sys.stdout.write("\n")
-    #print((cmake_parameter_list))
     process = subprocess.Popen(cmake_parameter_list, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, cwd=mcsema_build_folder)
 

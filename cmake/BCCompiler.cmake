@@ -136,7 +136,7 @@ function (add_runtime target_name)
     foreach (source_file ${source_file_list})
         get_filename_component(source_file_name "${source_file}" NAME)
         get_filename_component(absolute_source_file_path "${source_file}" ABSOLUTE)
-        set(absolute_output_file_path "${CMAKE_CURRENT_BINARY_DIR}/${source_file_name}.bc_o")
+        set(absolute_output_file_path "${CMAKE_CURRENT_BINARY_DIR}/${target_name}_${source_file_name}.bc_o")
 
         add_custom_command(OUTPUT "${absolute_output_file_path}"
             COMMAND "${CMAKE_BC_COMPILER}" ${bc_flag_list} ${definition_list} ${include_directory_list} -c "${absolute_source_file_path}" -o "${absolute_output_file_path}"
@@ -162,4 +162,6 @@ function (add_runtime target_name)
 
     add_custom_target("${target_name}" ALL DEPENDS "${absolute_target_path}")
     set_property(TARGET "${target_name}" PROPERTY LOCATION "${absolute_target_path}")
+
+    set("${target_name}_location" "${absolute_target_path}" PARENT_SCOPE)
 endfunction ()

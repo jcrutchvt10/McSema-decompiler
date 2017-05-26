@@ -5,7 +5,6 @@ cmake_minimum_required(VERSION 3.1)
 
 # common settings
 include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
-enable_language(BC)
 
 #
 # libraries
@@ -174,7 +173,6 @@ set(PROJECT_SOURCEFILES
 add_executable(mcsema-lift ${PROJECT_SOURCEFILES})
 target_include_directories(mcsema-lift SYSTEM PRIVATE ${PROJECT_SYSTEMINCLUDEDIRECTORIES})
 target_include_directories(mcsema-lift PRIVATE ${PROJECT_INCLUDEDIRECTORIES})
-message(STATUS "project defines:" ${PROJECT_DEFINITIONS})
 target_compile_definitions(mcsema-lift PRIVATE ${PROJECT_DEFINITIONS} ${GLOBAL_DEFINITIONS})
 target_compile_options(mcsema-lift PRIVATE ${GLOBAL_CXXFLAGS})
 target_link_libraries(mcsema-lift PRIVATE ${PROJECT_LIBRARIES})
@@ -189,8 +187,8 @@ endif ()
 add_dependencies(mcsema-lift protobuf_python_module)
 
 # also add the Runtime and Bitcode targets
-#add_subdirectory(mcsema/Arch/X86/Runtime)
-#add_subdirectory(mcsema/Arch/X86/Semantics/Bitcode)
+add_subdirectory(mcsema/Arch/X86/Runtime)
+add_subdirectory(mcsema/Arch/X86/Semantics/Bitcode)
 
 #
 # install directives
