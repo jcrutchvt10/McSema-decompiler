@@ -57,7 +57,7 @@ if (WIN32)
             OUTPUT "${library_asm_path}"
             COMMAND "${executable_name}"
             DEPENDS "${executable_name}"
-            COMMENT "Generating: ${library_asm_path}")
+            COMMENT "Generating: ${library_asm_path}"
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
     endfunction ()

@@ -200,3 +200,11 @@ install(TARGETS mcsema-lift DESTINATION "bin")
 install(DIRECTORY "tools/mcsema_disass/" DESTINATION "share/mcsema/ida_plugin_installer")
 install(FILES "tools/setup.py" DESTINATION "share/mcsema/ida_plugin_installer")
 install(FILES "${PROJECT_PROTOBUFPYTHONMODULE}" DESTINATION "share/mcsema/ida_plugin_installer/ida")
+
+#
+# package generation
+#
+
+if (WIN32)
+    add_subdirectory("${CMAKE_SOURCE_DIR}/windows/msi_installer")
+endif ()
