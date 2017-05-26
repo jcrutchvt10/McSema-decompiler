@@ -172,13 +172,18 @@ def main():
         
         vs_env_settings = windows.get_visual_studio_env_settings()
         cmake_parameter_list.append(vs_env_settings.vsbuild)
+        cmake_parameter_list.append("-T")
+        cmake_parameter_list.append("LLVM-vs2014") # todo: detect this automatically
+
         cmake_parameter_list.append("--")
         cmake_parameter_list.append("/verbosity:detailed")
 
     cmake_parameter_list.append(source_folder)
 
     # todo: remove this!
-    print(str(cmake_parameter_list))
+    sys.stdout.write(" ".join(cmake_parameter_list))
+    sys.stdout.write("\n")
+    #print((cmake_parameter_list))
     process = subprocess.Popen(cmake_parameter_list, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, cwd=mcsema_build_folder)
 
@@ -188,14 +193,8 @@ def main():
         return False
 
     print("Building McSema...")
-    cmake_parameters = [cmake_path, "--build", ".", "--"]
+    cmake_parameters = [cmake_path, "--build", ".", "--config", build_type, "--"]
     cmake_parameters = utils.append_parallel_build_options(cmake_parameters)
-
-    if platform_type == "windows":
-        cmake_parameter_list.append("-T")
-        cmake_parameter_list.append("LLVM-vs2014") # todo: detect this automatically
-
-        cmake_parameter_list.append("/verbosity:detailed")
 
     process = subprocess.Popen(cmake_parameters, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                cwd=mcsema_build_folder)

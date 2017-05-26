@@ -14,7 +14,7 @@ function (generate_bitcode address_size)
 
     message(" > Generating target: mcsema_semantics_${target_name}")
 
-    add_runtime("mcsema_semantics_${target_name}" SOURCES "FXAM.cpp" ADDRESS_SIZE ${address_size})
+    add_runtime("mcsema_semantics_${target_name}" SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/FXAM.bcpp" ADDRESS_SIZE ${address_size})
     target_include_directories("mcsema_semantics_${target_name}" PRIVATE "${CMAKE_SOURCE_DIR}")
 
     # not needed under cygwin, as we can only build what our current toolchain supports
