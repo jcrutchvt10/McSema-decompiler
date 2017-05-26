@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 3.1)
 
 # common settings
 include(${CMAKE_SOURCE_DIR}/cmake/settings.cmake)
+enable_language(BC)
 
 #
 # libraries
@@ -46,7 +47,12 @@ else ()
 endif ()
 
 list(APPEND PROJECT_LIBRARIES ${LLVM_LIBRARIES})
-list(APPEND PROJECT_DEFINITIONS ${LLVM_DEFINITIONS})
+
+if(NOT WIN32)
+  # LLVM definitions are broken, they include /MP as a definition when its a flag
+  list(APPEND PROJECT_DEFINITIONS ${LLVM_DEFINITIONS})
+endif()
+
 list(APPEND PROJECT_SYSTEMINCLUDEDIRECTORIES ${LLVM_INCLUDE_DIRS})
 
 string(REPLACE "." "" MCSEMA_LLVMVERSION ${LLVM_PACKAGE_VERSION})
@@ -166,8 +172,9 @@ set(PROJECT_SOURCEFILES
 add_executable(mcsema-lift ${PROJECT_SOURCEFILES})
 target_include_directories(mcsema-lift SYSTEM PRIVATE ${PROJECT_SYSTEMINCLUDEDIRECTORIES})
 target_include_directories(mcsema-lift PRIVATE ${PROJECT_INCLUDEDIRECTORIES})
-target_compile_definitions(mcsema-lift PRIVATE ${PROJECT_DEFINITIONS})
-set_target_properties(mcsema-lift PROPERTIES COMPILE_FLAGS ${GLOBAL_CXXFLAGS})
+message(STATUS "project defines:" ${PROJECT_DEFINITIONS})
+target_compile_definitions(mcsema-lift PRIVATE ${PROJECT_DEFINITIONS} ${GLOBAL_DEFINITIONS})
+target_compile_options(mcsema-lift PRIVATE ${GLOBAL_CXXFLAGS})
 target_link_libraries(mcsema-lift PRIVATE ${PROJECT_LIBRARIES})
 
 # this is only needed when linking on windows; this error originates from the LLVM
