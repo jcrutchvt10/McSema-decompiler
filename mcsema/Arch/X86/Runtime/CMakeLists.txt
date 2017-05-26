@@ -48,7 +48,7 @@ if (WIN32)
             OUTPUT "${library_obj_path}"
             COMMAND "${CMAKE_C_COMPILER}" ${compile_flag} "/Fo${library_obj_path}" /c "${library_asm_path}"
             DEPENDS "${library_asm_path}"
-            COMMENT "Building Runtime ASM..."
+            COMMENT "Generating: ${library_obj_path}."
         )
         set_source_files_properties("${library_obj_path}" PROPERTIES EXTERNAL_OBJECT True GENERATED True)
 
@@ -57,12 +57,14 @@ if (WIN32)
             OUTPUT "${library_asm_path}"
             COMMAND "${executable_name}"
             DEPENDS "${executable_name}"
-            COMMENT "Generating ${address_size}-bit Windows PE runtime..."
+            COMMENT "Generating: ${library_asm_path}")
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
     endfunction ()
 
-    #generate_target(32)
+    # todo: looks like the obj->lib command is getting a foreign "/machine:x64" parameter
+    # and this causes linking issues
+    # generate_target(32)
     generate_target(64)
 endif ()
 
@@ -117,7 +119,7 @@ if (DEFINED UNIX)
         OUTPUT runtime_32.S
         COMMAND mcsema-print-runtime-x86
         DEPENDS mcsema-print-runtime-x86
-        COMMENT "Generating 32-bit Linux ELF runtime..."
+        COMMENT "Generating: runtime_32.S"
     )
 
     add_library(mcsema_rt32 STATIC runtime_32.S)
@@ -136,7 +138,7 @@ if (DEFINED UNIX)
             OUTPUT runtime_64.S
             COMMAND mcsema-print-runtime-amd64
             DEPENDS mcsema-print-runtime-amd64
-            COMMENT "Generating 64-bit Linux ELF runtime..."
+            COMMENT "Generating: runtime_64.S"
         )
     endif ()
 endif ()
