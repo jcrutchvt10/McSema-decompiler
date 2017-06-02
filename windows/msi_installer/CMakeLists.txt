@@ -43,6 +43,8 @@ else ()
         WORKING_DIRECTORY "${CMAKE_INSTALL_PREFIX}"
     )
 
-    add_custom_target(${PROJECT_NAME} ALL DEPENDS "${INSTALLER_MSI_FILE}")
-    add_dependencies(mcsema-lift ${PROJECT_NAME})
+    add_custom_target(${PROJECT_NAME} DEPENDS "${INSTALLER_MSI_FILE}")
+    add_dependencies(${PROJECT_NAME} mcsema-lift)
+
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/test_environment.py" DESTINATION "bin")
 endif ()

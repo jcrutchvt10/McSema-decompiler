@@ -74,6 +74,10 @@ def main():
     arg_parser.add_argument("--run-tests", help="also run the integration tests",
                             action="store_true")
 
+    if platform_type == "windows":
+        arg_parser.add_argument("--build-msi-package", help="generate the MSI package (requires the WiX toolset)",
+                                action="store_true")
+
     arguments = arg_parser.parse_args()
 
     build_folder = "build"
@@ -84,10 +88,6 @@ def main():
         local_llvm_folder = os.path.realpath(os.path.join(build_folder, "llvm-install", "bin"))
         if os.path.isdir(local_llvm_folder):
             os.environ["PATH"] = os.environ["PATH"] + ";" + local_llvm_folder.replace("\\", "/")
-
-        local_ninja_folder = os.path.realpath(os.path.join(build_folder, "ninja-install"))
-        if os.path.isdir(local_ninja_folder):
-            os.environ["PATH"] = os.environ["PATH"] + ";" + local_ninja_folder.replace("\\", "/")
 
     if arguments.install_deps:
         print("Looking for missing dependencies...")
@@ -133,7 +133,7 @@ def main():
     if platform_type == "windows":
         windows_arch = "Win64"
 
-    cmake = cmakewrapper.CMake(source_folder, mcsema_build_folder, windows_arch=windows_arch, debug=True)
+    cmake = cmakewrapper.CMake(source_folder, mcsema_build_folder, windows_arch=windows_arch, debug=False)
 
     cmake_parameters = None
     if platform_type == "windows":
@@ -174,26 +174,27 @@ def main():
         if not os.path.isdir(x86_mcsema_build_folder):
             os.mkdir(x86_mcsema_build_folder)
 
-        cmake = cmakewrapper.CMake(source_folder, x86_mcsema_build_folder, windows_arch="Win32", debug=True)
+        cmake_x86_build = cmakewrapper.CMake(
+            source_folder, x86_mcsema_build_folder, windows_arch="Win32", debug=False)
 
         cmake_parameters = ["-DCMAKE_MODULE_PATH=" + cmake_module_path,
                             "-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path,
                             "-DCMAKE_PREFIX_PATH=" + llvm_install_prefix]
 
-        cmake_error = cmake.configure(install_prefix, "Release", parameters=cmake_parameters)
+        cmake_error = cmake_x86_build.configure(install_prefix, "Release", parameters=cmake_parameters)
         if not cmake_error[0]:
             print("CMake has reported an error. Full output follows...")
             print cmake_error[1]
             return False
 
         print("Building McSema (32-bit)...")
-        cmake_error = cmake.build("mcsema\\Arch\\X86\\Runtime\\mcsema_rt32")
+        cmake_error = cmake_x86_build.build("mcsema\\Arch\\X86\\Runtime\\mcsema_rt32")
         if not cmake_error[0]:
             print("The build system has reported an error. Full output follows...")
             print cmake_error[1]
             return False
 
-        cmake_error = cmake.build("mcsema\\Arch\\X86\\Semantics\\Bitcode\\mcsema_semantics_x86")
+        cmake_error = cmake_x86_build.build("mcsema\\Arch\\X86\\Semantics\\Bitcode\\mcsema_semantics_x86")
         if not cmake_error[0]:
             print("The build system has reported an error. Full output follows...")
             print cmake_error[1]
@@ -208,12 +209,11 @@ def main():
         runtime_dest_path = os.path.realpath(os.path.join(install_prefix, "lib"))
 
         semantics_bitcode_path = os.path.realpath(os.path.join(x86_mcsema_build_folder,
-                                                              "mcsema", "Arch", "X86",
-                                                              "Semantics", "Bitcode",
-                                                              "mcsema_semantics_x86.bc"))
+                                                               "mcsema", "Arch", "X86",
+                                                               "Semantics", "Bitcode",
+                                                               "mcsema_semantics_x86.bc"))
 
-
-        smenatics_dest_path = os.path.realpath(os.path.join(install_prefix, "share",
+        semantics_dest_path = os.path.realpath(os.path.join(install_prefix, "share",
                                                             "mcsema", "bitcode"))
         try:
             shutil.copy(runtime_lib_path, runtime_dest_path)
@@ -223,11 +223,20 @@ def main():
             return False
 
         try:
-            shutil.copy(semantics_bitcode_path, smenatics_dest_path)
+            shutil.copy(semantics_bitcode_path, semantics_dest_path)
 
         except Exception:
             print("Failed to install the following file: " +
                   semantics_bitcode_path)
+            return False
+
+    if platform_type == "windows" and arguments.build_msi_package:
+        print("Building the MSI package...")
+
+        cmake_error = cmake.build("windows\\msi_installer\\windows_msi_installer")
+        if not cmake_error[0]:
+            print("The build system has reported an error. Full output follows...")
+            print cmake_error[1]
             return False
 
     if arguments.run_tests:

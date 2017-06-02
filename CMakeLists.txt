@@ -5,7 +5,7 @@ if ("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN")
 endif ()
 
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
-    message(FATAL_ERROR "In-source builds are disabled.")
+    message(FATAL_ERROR "In-source builds are disabled. Please remove the following files and folders: CMakeCache.txt, CMakeFiles")
 endif ()
 
 project(mcsema)
@@ -205,9 +205,9 @@ add_subdirectory(mcsema/Arch/X86/Semantics/Bitcode)
 install(TARGETS mcsema-lift DESTINATION "bin")
 
 # prepare the plugin installer
-install(DIRECTORY "tools/mcsema_disass/" DESTINATION "share/mcsema/ida_plugin_installer")
+install(DIRECTORY "tools/mcsema_disass" DESTINATION "share/mcsema/ida_plugin_installer")
 install(FILES "tools/setup.py" DESTINATION "share/mcsema/ida_plugin_installer")
-install(FILES "${PROJECT_PROTOBUFPYTHONMODULE}" DESTINATION "share/mcsema/ida_plugin_installer/ida")
+install(FILES "${PROJECT_PROTOBUFPYTHONMODULE}" DESTINATION "share/mcsema/ida_plugin_installer/mcsema_disass/ida")
 
 #
 # package generation
