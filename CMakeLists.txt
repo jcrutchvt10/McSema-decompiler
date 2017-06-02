@@ -4,6 +4,10 @@ if ("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN")
     set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 endif ()
 
+if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+    message(FATAL_ERROR "In-source builds are disabled.")
+endif ()
+
 project(mcsema)
 cmake_minimum_required(VERSION 3.1)
 
