@@ -62,10 +62,13 @@ if (WIN32)
         )
     endfunction ()
 
-    # todo: looks like the obj->lib command is getting a foreign "/machine:x64" parameter
-    # and this causes linking issues
-    # generate_target(32)
-    generate_target(64)
+    # when using visual studio, it is the generator that has been specified that
+    # decides which architecture we are targeting
+    if ("${CMAKE_GENERATOR}" MATCHES "Win64")
+        generate_target(64)
+    else ()
+        generate_target(32)
+    endif ()
 endif ()
 
 #

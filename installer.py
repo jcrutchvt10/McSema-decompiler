@@ -5,9 +5,10 @@ import platform
 import subprocess
 import argparse
 import os
+import shutil
 from distutils import spawn
 
-from installer import utils, osx, windows, linux
+from installer import utils, osx, windows, linux, cmakewrapper
 
 def install_dependencies():
     """
@@ -65,11 +66,6 @@ def main():
         print("Unknown platform! Aborting...")
         return False
 
-    # somehow cygwin causes issues with paths
-    elif platform_type == "cygwin":
-        print("Cygwin is not supported! Aborting...")
-        return False
-
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--install-deps", help="install required dependencies",
                             action="store_true")
@@ -122,118 +118,117 @@ def main():
 
     print("Install prefix: " + install_prefix)
 
-    mcsema_build_folder = os.path.join(build_folder, "mcsema-build")
+    source_folder = os.path.realpath(".")
+    mcsema_build_folder = os.path.realpath(os.path.join(build_folder, "mcsema-build"))
     if not os.path.isdir(mcsema_build_folder):
         os.mkdir(mcsema_build_folder)
 
-    mcsema_build_folder = os.path.realpath(mcsema_build_folder)
-    if platform_type == "windows":
-        mcsema_build_folder = mcsema_build_folder.replace("\\", "/")
-
+    print("Source folder: " + source_folder)
     print("Build folder: " + mcsema_build_folder)
 
-    cmake_path = utils.get_cmake_path()
-    if cmake_path is None:
-        print("Failed to locate cmake")
-        return False
-
-    clang_path = utils.get_clang_path()
-    if clang_path is None:
-        print("Failed to locate the clang compiler")
-
-    # todo: add windows variables
     # todo: ubuntu should use the pre-built tarball
     print("Configuring McSema...")
 
-    source_folder = os.path.realpath(".")
+    windows_arch = None
     if platform_type == "windows":
-        source_folder = source_folder.replace("\\", "/")
+        windows_arch = "Win64"
 
+    cmake = cmakewrapper.CMake(source_folder, mcsema_build_folder, windows_arch=windows_arch, debug=True)
+
+    cmake_parameters = None
     if platform_type == "windows":
-        build_type = "Release"
-    else:
-        build_type = "RelWithDebInfo"
-
-    cmake_parameter_list = [cmake_path, "-DCMAKE_BUILD_TYPE=" + build_type,
-                            "-DCMAKE_VERBOSE_MAKEFILE=True",
-                            "-DCMAKE_INSTALL_PREFIX=" + install_prefix]
-
-    if platform_type != "windows":
-        cmake_parameter_list.append("-DCMAKE_C_COMPILER=" + clang_path.c_compiler)
-        cmake_parameter_list.append("-DCMAKE_CXX_COMPILER=" + clang_path.cpp_compiler)
-
-    else:
-        cmake_module_path = os.path.join(source_folder, "windows",
-                                         "protobuf_cmake_findpackage").replace("\\", "/")
-
+        cmake_module_path = os.path.join(source_folder, "windows", "protobuf_cmake_findpackage").replace("\\", "/")
         protobuf_install_path = os.path.join(build_folder, "protobuf-install").replace("\\", "/")
         llvm_install_prefix = os.path.join(build_folder, "llvm-install").replace("\\", "/")
 
-        cmake_parameter_list.append("-DCMAKE_MODULE_PATH=" + cmake_module_path)
-        cmake_parameter_list.append("-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path)
-        cmake_parameter_list.append("-DCMAKE_PREFIX_PATH=" + llvm_install_prefix)
+        cmake_parameters = []
+        cmake_parameters.append("-DCMAKE_MODULE_PATH=" + cmake_module_path)
+        cmake_parameters.append("-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path)
+        cmake_parameters.append("-DCMAKE_PREFIX_PATH=" + llvm_install_prefix)        
 
-        vs_env_settings = windows.get_visual_studio_env_settings()
-        cmake_parameter_list.append("-G")
-        cmake_parameter_list.append(vs_env_settings.vsbuild)
-
-        cmake_parameter_list.append("-T")
-        cmake_parameter_list.append("LLVM-vs2014") # todo: detect this automatically
-
-        cmake_parameter_list.append("--")
-        cmake_parameter_list.append("/verbosity:detailed")
-
-    cmake_parameter_list.append(source_folder)
-
-    process = subprocess.Popen(cmake_parameter_list, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, cwd=mcsema_build_folder)
-
-    output = process.communicate()[0]
-    if process.returncode != 0:
-        print(output)
+    cmake_error = cmake.configure(install_prefix, "Release", parameters=cmake_parameters)
+    if not cmake_error[0]:
+        print("CMake has reported an error. Full output follows...")
+        print cmake_error[1]
         return False
 
     print("Building McSema...")
-    cmake_parameters = [cmake_path, "--build", ".", "--config", build_type, "--"]
-    cmake_parameters = utils.append_parallel_build_options(cmake_parameters)
-
-    process = subprocess.Popen(cmake_parameters, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               cwd=mcsema_build_folder)
-
-    output = process.communicate()[0]
-    if process.returncode != 0:
-        print(output)
+    cmake_error = cmake.build()
+    if not cmake_error[0]:
+        print("The build system has reported an error. Full output follows...")
+        print cmake_error[1]
         return False
 
     print("Installing McSema...")
-
-    cmake_command = []
-
-    platform_type = utils.get_platform_type()
-    if platform_type == "linux" or platform_type == "osx":
-        cmake_command.append("sudo")
-
-    cmake_command.append(cmake_path)
-
-    cmake_command.append("--build")
-    cmake_command.append(".")
-
-    cmake_command.append("--config")
-    cmake_command.append("Release")
-
-    cmake_command.append("--target")
-    cmake_command.append("install")
-
-    process = subprocess.Popen(cmake_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               cwd=mcsema_build_folder)
-
-    output = process.communicate()[0]
-    if process.returncode != 0:
-        print(output)
+    cmake_error = cmake.install()
+    if not cmake_error[0]:
+        print("The build system has reported an error. Full output follows...")
+        print cmake_error[1]
         return False
 
-    if platform_type == "linux" or platform_type == "osx":
-        subprocess.call(["sudo", "-K"])
+    # we don't have "multilib" when building with with visual studio or cygwin
+    if platform_type == "windows" or platform_type == "cygwin":
+        print("Configuring McSema (32-bit)...")
+
+        x86_mcsema_build_folder = os.path.realpath(os.path.join(build_folder, "mcsema-build-x86"))
+        if not os.path.isdir(x86_mcsema_build_folder):
+            os.mkdir(x86_mcsema_build_folder)
+
+        cmake = cmakewrapper.CMake(source_folder, x86_mcsema_build_folder, windows_arch="Win32", debug=True)
+
+        cmake_parameters = ["-DCMAKE_MODULE_PATH=" + cmake_module_path,
+                            "-DPROTOBUF_INSTALL_DIR=" + protobuf_install_path,
+                            "-DCMAKE_PREFIX_PATH=" + llvm_install_prefix]
+
+        cmake_error = cmake.configure(install_prefix, "Release", parameters=cmake_parameters)
+        if not cmake_error[0]:
+            print("CMake has reported an error. Full output follows...")
+            print cmake_error[1]
+            return False
+
+        print("Building McSema (32-bit)...")
+        cmake_error = cmake.build("mcsema\\Arch\\X86\\Runtime\\mcsema_rt32")
+        if not cmake_error[0]:
+            print("The build system has reported an error. Full output follows...")
+            print cmake_error[1]
+            return False
+
+        cmake_error = cmake.build("mcsema\\Arch\\X86\\Semantics\\Bitcode\\mcsema_semantics_x86")
+        if not cmake_error[0]:
+            print("The build system has reported an error. Full output follows...")
+            print cmake_error[1]
+            return False
+
+        print("Installing McSema (32-bit)...")
+        runtime_lib_path = os.path.realpath(os.path.join(x86_mcsema_build_folder,
+                                                         "mcsema", "Arch", "X86",
+                                                         "Runtime", "Release",
+                                                         "mcsema_rt32.lib"))
+
+        runtime_dest_path = os.path.realpath(os.path.join(install_prefix, "lib"))
+
+        semantics_bitcode_path = os.path.realpath(os.path.join(x86_mcsema_build_folder,
+                                                              "mcsema", "Arch", "X86",
+                                                              "Semantics", "Bitcode",
+                                                              "mcsema_semantics_x86.bc"))
+
+
+        smenatics_dest_path = os.path.realpath(os.path.join(install_prefix, "share",
+                                                            "mcsema", "bitcode"))
+        try:
+            shutil.copy(runtime_lib_path, runtime_dest_path)
+
+        except Exception:
+            print("Failed to install the following file: " + runtime_lib_path)
+            return False
+
+        try:
+            shutil.copy(semantics_bitcode_path, smenatics_dest_path)
+
+        except Exception:
+            print("Failed to install the following file: " +
+                  semantics_bitcode_path)
+            return False
 
     if arguments.run_tests:
         print("Running tests...")

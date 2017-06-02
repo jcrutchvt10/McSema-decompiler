@@ -1,5 +1,9 @@
 # Copyright 2017 Peter Goodman (peter@trailofbits.com), all rights reserved.
 
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN")
+    set(CMAKE_LEGACY_CYGWIN_WIN32 0)
+endif ()
+
 project(mcsema)
 cmake_minimum_required(VERSION 3.1)
 

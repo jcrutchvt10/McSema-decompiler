@@ -15,10 +15,8 @@ endif ()
 function (generate_bitcode address_size)
     if (${address_size} EQUAL 32)
         set(target_name "mcsema_semantics_x86")
-
     elseif (${address_size} EQUAL 64)
         set(target_name "mcsema_semantics_amd64")
-
     else ()
         message(FATAL_ERROR "Invalid address size specified")
     endif ()
@@ -36,12 +34,21 @@ function (generate_bitcode address_size)
     install(FILES "${${target_name}_location}" DESTINATION "share/mcsema/bitcode")
 endfunction ()
 
-# cygwin does not support multilib
+# cygwin does not support multilib (you need to install both the x86 and amd64 versions)
 if ("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN")
     if (CMAKE_SIZEOF_VOID_P EQUAL 4)
         generate_bitcode(32)
     else ()
         generate_bitcode(64)
+    endif ()
+
+# when using visual studio, it is the generator that has been specified that
+# decides which architecture we are targeting
+elseif (WIN32)
+    if ("${CMAKE_GENERATOR}" MATCHES "Win64")
+        generate_bitcode(64)
+    else ()
+        generate_bitcode(32)
     endif ()
 
 # assume multilib can be used
