@@ -1261,14 +1261,107 @@ def getAllExports():
 
   return to_recover 
 
-if __name__ == "__main__":
+def exportCfg(log_file_name, arch, pie_mode, operating_system, std_defs, syms, entrypoint, output_file_name, standalone):
+  output = open(output_file_name, "wb")
+  if not log_file_name:
+    log_file = sys.stderr
+  else:
+    log_file = open(log_file_name, "w")
 
+  INIT_DEBUG_FILE(log_file)
+  DEBUG("Debugging is enabled.")
+
+  addr_size = {"x86": 32, "amd64": 64, "aarch64": 64}.get(arch, 0)
+  if addr_size != get_address_size_in_bits():
+    DEBUG("Arch {} address size does not match IDA's available bitness {}! Did you mean to use idal64?".format(
+        arch, get_address_size_in_bits()))
+
+    if standalone:
+      idc.ChangeConfig("ABANDON_DATABASE=YES")
+      idc.Exit(-1)
+    else:
+      return False
+
+  if pie_mode:
+    DEBUG("Using PIE mode.")
+    PIE_MODE = True
+
+  EMAP = {}
+  EMAP_DATA = {}
+
+  # Try to find the defs file or this OS
+  OS_NAME = operating_system
+  os_defs_file = os.path.join(tools_disass_dir, "defs", "{}.txt".format(operating_system))
+  if os.path.isfile(os_defs_file):
+    std_defs.insert(0, os_defs_file)
+
+  # Load in all defs files, include custom ones.
+  for defsfile in std_defs:
+    with open(defsfile, "r") as df:
+      DEBUG("Loading Standard Definitions file: {0}".format(defsfile))
+      parse_os_defs_file(df)
+
+  # Turn off "automatically make offset" heuristic, and set some
+  # other sane defaults.
+  if standalone:
+    idc.SetShortPrm(idc.INF_START_AF, 0xdfff)
+    idc.SetShortPrm(idc.INF_AF2, 0xfffd)
+
+  # Ensure that IDA is done processing
+  if standalone:
+    DEBUG("Using Batch mode.")
+    idaapi.autoWait()
+
+  DEBUG("Starting analysis")
+  analysis_succeeded = False
+
+  try:
+    # Pre-define a bunch of symbol names and their addresses. Useful when reading
+    # a core dump.
+    if syms:
+      for line in syms:
+        name, ea_str = line.strip().split(" ")
+        ea = int(ea_str, base=16)
+        if not is_internal_code(ea):
+          try_mark_as_code(ea)
+        if is_code(ea):
+          try_mark_as_function(ea)
+          set_symbol_name(ea, name)
+      idaapi.autoWait()
+    
+    M = recover_module(entrypoint)
+
+    DEBUG("Saving to: {0}".format(output_file_name))
+    output.write(M.SerializeToString())
+    output.close()
+
+    analysis_succeeded = True
+
+  except:
+    DEBUG(traceback.format_exc())
+  
+  DEBUG("Done analysis!")
+
+  if not analysis_succeeded:
+    if standalone:
+      idc.ChangeConfig("ABANDON_DATABASE=YES")
+      idc.Exit(1)
+    else:
+      return False
+
+  if standalone:
+    idc.ChangeConfig("ABANDON_DATABASE=YES")
+    idc.Exit(0)
+  else:
+    return True
+
+if __name__ == "__main__":
   parser = argparse.ArgumentParser()
 
   parser.add_argument(
       "--log_file",
-      type=argparse.FileType('w'),
-      default=sys.stderr,
+      type=str,
+      default="",
       help="Log to a specific file. Default is stderr.")
 
   parser.add_argument(
@@ -1283,7 +1376,7 @@ if __name__ == "__main__":
 
   parser.add_argument(
       "--output",
-      type=argparse.FileType('wb'),
+      type=str,
       default=None,
       help="The output control flow graph recovered from this file",
       required=True)
@@ -1313,70 +1406,4 @@ if __name__ == "__main__":
       required=True)
 
   args = parser.parse_args(args=idc.ARGV[1:])
-
-  if args.log_file != os.devnull:
-    INIT_DEBUG_FILE(args.log_file)
-    DEBUG("Debugging is enabled.")
-
-  addr_size = {"x86": 32, "amd64": 64, "aarch64": 64}.get(args.arch, 0)
-  if addr_size != get_address_size_in_bits():
-    DEBUG("Arch {} address size does not match IDA's available bitness {}! Did you mean to use idal64?".format(
-        args.arch, get_address_size_in_bits()))
-    idc.ChangeConfig("ABANDON_DATABASE=YES")
-    idc.Exit(-1)
-
-  if args.pie_mode:
-    DEBUG("Using PIE mode.")
-    PIE_MODE = True
-
-  EMAP = {}
-  EMAP_DATA = {}
-
-  # Try to find the defs file or this OS
-  OS_NAME = args.os
-  os_defs_file = os.path.join(tools_disass_dir, "defs", "{}.txt".format(args.os))
-  if os.path.isfile(os_defs_file):
-    args.std_defs.insert(0, os_defs_file)
-
-  # Load in all defs files, include custom ones.
-  for defsfile in args.std_defs:
-    with open(defsfile, "r") as df:
-      DEBUG("Loading Standard Definitions file: {0}".format(defsfile))
-      parse_os_defs_file(df)
-
-  # Turn off "automatically make offset" heuristic, and set some
-  # other sane defaults.
-  idc.SetShortPrm(idc.INF_START_AF, 0xdfff)
-  idc.SetShortPrm(idc.INF_AF2, 0xfffd)
-
-  # Ensure that IDA is done processing
-  DEBUG("Using Batch mode.")
-  idaapi.autoWait()
-
-  DEBUG("Starting analysis")
-  try:
-    # Pre-define a bunch of symbol names and their addresses. Useful when reading
-    # a core dump.
-    if args.syms:
-      for line in args.syms:
-        name, ea_str = line.strip().split(" ")
-        ea = int(ea_str, base=16)
-        if not is_internal_code(ea):
-          try_mark_as_code(ea)
-        if is_code(ea):
-          try_mark_as_function(ea)
-          set_symbol_name(ea, name)
-      idaapi.autoWait()
-    
-    M = recover_module(args.entrypoint)
-
-    DEBUG("Saving to: {0}".format(args.output.name))
-    args.output.write(M.SerializeToString())
-    args.output.close()
-
-  except:
-    DEBUG(traceback.format_exc())
-  
-  DEBUG("Done analysis!")
-  idc.ChangeConfig("ABANDON_DATABASE=YES")
-  idc.Exit(0)
+  exportCfg(args.log_file, args.arch, args.pie_mode, args.os, args.std_defs, args.syms, args.entrypoint, args.output, True)
